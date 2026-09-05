@@ -34,6 +34,8 @@ export default function GameGrid({
           <button
             key={game.id}
             className={`card ${selectedId === game.id ? "selected" : ""}`}
+            data-game-id={game.id}
+            {...(selectedId === game.id ? { "data-nav-default": "" } : {})}
             onClick={() => onSelect(game.id)}
             onDoubleClick={() => onLaunch(game.id)}
             title={`${game.title}\nDouble-click to play`}

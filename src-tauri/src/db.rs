@@ -420,6 +420,68 @@ pub fn game_id_by_path(conn: &Connection, path: &str) -> Result<Option<i64>> {
         .optional()?)
 }
 
+/// What a scan needs to know about the rows already in the library: enough to
+/// tell an entry that is fine from one indexed under an older, worse rule.
+pub struct IndexState {
+    pub id: i64,
+    pub platform: String,
+    pub inner_name: Option<String>,
+    /// True when the entry carries something a scan must never throw away on
+    /// a heuristic: time played, a favourite mark, or a tie to a ROM hack.
+    pub precious: bool,
+}
+
+pub fn index_state(conn: &Connection) -> Result<std::collections::HashMap<String, IndexState>> {
+    let mut stmt = conn.prepare(
+        "SELECT g.id, g.path, g.platform, g.inner_name,
+                (g.play_seconds > 0 OR g.play_count > 0 OR g.favorite <> 0
+                 OR g.base_game_id IS NOT NULL OR g.patch_path IS NOT NULL
+                 OR EXISTS (SELECT 1 FROM games h WHERE h.base_game_id = g.id))
+         FROM games g",
+    )?;
+    let rows = stmt.query_map([], |r| {
+        Ok((
+            r.get::<_, String>(1)?,
+            IndexState {
+                id: r.get(0)?,
+                platform: r.get(2)?,
+                inner_name: r.get(3)?,
+                precious: r.get(4)?,
+            },
+        ))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<std::collections::HashMap<_, _>>>()?)
+}
+
+/// Correct the indexing facts for a row that was recorded under an older rule.
+///
+/// Only the facts a scan owns are touched. Title, artwork and everything else
+/// a scraper wrote stay as they are, and a platform that is already set is
+/// left alone — it may well have been chosen by hand.
+pub fn reindex_game(
+    conn: &Connection,
+    id: i64,
+    platform: &str,
+    size: i64,
+    crc32: Option<&str>,
+    md5: Option<&str>,
+    sha1: Option<&str>,
+    inner_name: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "UPDATE games SET
+            platform   = CASE WHEN platform = 'unknown' THEN ?2 ELSE platform END,
+            size       = ?3,
+            crc32      = ?4,
+            md5        = ?5,
+            sha1       = ?6,
+            inner_name = ?7
+         WHERE id = ?1",
+        params![id, platform, size, crc32, md5, sha1, inner_name],
+    )?;
+    Ok(())
+}
+
 pub fn all_paths(conn: &Connection) -> Result<std::collections::HashSet<String>> {
     let mut stmt = conn.prepare("SELECT path FROM games")?;
     let rows = stmt.query_map([], |r| r.get::<_, String>(0))?;

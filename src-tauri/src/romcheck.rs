@@ -12,6 +12,7 @@
 use std::io::Read;
 use std::path::Path;
 
+use crate::hashing;
 use crate::platforms;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -57,7 +58,42 @@ const BIOS_HINTS: &[&str] = &[
     "cgb_boot", "sgb_boot", "boot rom", "bootrom", "firmware", "kickstart",
     "neogeo.zip", "lynxboot", "panafz", "goldstar", "saturn_bios", "sega_101",
     "mpr-17933", "3do_bios", "pcfx", "x68000", "spc7110",
+    // An emulator's own support files, for loose copies that turn up outside
+    // the install they came from. The install itself is skipped wholesale.
+    "dsp_rom", "dsp_coef", "codehandler", "font_western", "font_japanese",
+    "font_sjis", "font_ansi", "nwc24", "sd.raw", "totaldb",
 ];
+
+/// Extensions that make a file a program. Nothing that ships one of these is
+/// a game dump: it is an emulator, an installer or a tool.
+const PROGRAM_EXTS: &[&str] = &["exe", "dll", "so", "dylib", "msi", "sys", "efi"];
+
+fn is_program(name: &str) -> bool {
+    Path::new(name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| PROGRAM_EXTS.contains(&e.to_ascii_lowercase().as_str()))
+        .unwrap_or(false)
+}
+
+/// True if this directory is a program's own folder rather than a place ROMs
+/// are kept.
+///
+/// Emulators get unpacked into ROM libraries all the time, and their `Sys`
+/// and data folders are full of firmware blobs, fonts and cheat databases
+/// that look enough like ROMs to be indexed — Dolphin alone contributes a
+/// dozen `.bin` files. Spotting the install at its root throws out the whole
+/// tree in one go, which is both cheaper and more reliable than trying to
+/// name every file inside it.
+pub fn holds_a_program(dir: &Path) -> bool {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return false;
+    };
+    entries.flatten().any(|e| {
+        e.file_type().map(|t| t.is_file()).unwrap_or(false)
+            && e.file_name().to_str().map(is_program).unwrap_or(false)
+    })
+}
 
 /// Header signatures we can positively confirm, per platform.
 fn expected_magic(platform: &str) -> Option<(usize, &'static [&'static [u8]], &'static str)> {
@@ -126,10 +162,12 @@ pub fn inspect(path: &Path, platform: &str) -> Verdict {
         .unwrap_or("")
         .to_ascii_lowercase();
 
-    // Archives are opened elsewhere; their contents decide.
-    if platforms::ARCHIVE_EXTS.contains(&ext.as_str())
-        || platforms::OPAQUE_ARCHIVE_EXTS.contains(&ext.as_str())
-    {
+    // Archives are judged by what is inside them.
+    if platforms::ARCHIVE_EXTS.contains(&ext.as_str()) {
+        return inspect_archive(path);
+    }
+    // One we have no extractor for gets the benefit of the doubt.
+    if platforms::OPAQUE_ARCHIVE_EXTS.contains(&ext.as_str()) {
         return Verdict::Rom;
     }
 
@@ -141,6 +179,22 @@ pub fn inspect(path: &Path, platform: &str) -> Verdict {
         }
     }
 
+    Verdict::Rom
+}
+
+/// Judge an archive by its entries: a game dump holds a ROM, whereas an
+/// emulator or an installer holds programs.
+///
+/// Only a program is disqualifying. An archive we cannot open, or one whose
+/// contents we simply do not recognise, is still indexed — the bias stays
+/// toward keeping things.
+fn inspect_archive(path: &Path) -> Verdict {
+    let Ok(names) = hashing::archive_entry_names(path) else {
+        return Verdict::Rom;
+    };
+    if names.iter().any(|n| is_program(n)) {
+        return Verdict::NotRom("an application, not a game".into());
+    }
     Verdict::Rom
 }
 
@@ -173,6 +227,20 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// Payload that will not compress away, so an archive built from it stays
+    /// comfortably above the size floor and is judged on its contents.
+    fn incompressible(len: usize) -> Vec<u8> {
+        let mut state: u32 = 0x9e37_79b9;
+        (0..len)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                (state >> 24) as u8
+            })
+            .collect()
     }
 
     /// Padding so files clear the size floor.
@@ -259,6 +327,75 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    /// An emulator unpacked into the ROM folder: its own directory is spotted
+    /// by the programs in it, so nothing inside is ever inspected.
+    #[test]
+    fn spots_a_program_install_by_its_executables() {
+        let dir = tmp("install");
+        let emu = dir.join("Dolphin-x64");
+        std::fs::create_dir_all(emu.join("Sys").join("GC")).unwrap();
+        write(&emu, "Dolphin.exe", &padded(b"MZ", 9000));
+        write(&emu, "Qt6Core.dll", &padded(b"MZ", 9000));
+        write(&emu.join("Sys").join("GC"), "dsp_rom.bin", &padded(b"data", 9000));
+
+        assert!(holds_a_program(&emu));
+        // The ROM folder above it is not itself a program folder.
+        assert!(!holds_a_program(&dir));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// ...and a loose copy of one of those support files is still caught on
+    /// its name, for when it turns up outside the install it came from.
+    #[test]
+    fn rejects_emulator_support_files_by_name() {
+        let dir = tmp("support");
+        for name in ["dsp_rom.bin", "dsp_coef.bin", "font_western.bin", "codehandler.bin"] {
+            let f = write(&dir, name, &padded(b"data", 9000));
+            assert!(
+                matches!(inspect(&f, "gamecube"), Verdict::NotRom(r) if r.contains("BIOS")),
+                "{name} should be rejected"
+            );
+        }
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    /// A 7z of an emulator is an application however it is packaged.
+    #[test]
+    fn rejects_an_archive_full_of_programs() {
+        let dir = tmp("emuzip");
+
+        let app = dir.join("Dolphin Emu.7z");
+        {
+            let mut w = sevenz_rust2::ArchiveWriter::create(&app).unwrap();
+            for name in ["Dolphin-x64/Dolphin.exe", "Dolphin-x64/Sys/GC/dsp_rom.bin"] {
+                w.push_archive_entry(
+                    sevenz_rust2::ArchiveEntry::new_file(name),
+                    Some(incompressible(4000).as_slice()),
+                )
+                .unwrap();
+            }
+            w.finish().unwrap();
+        }
+        assert!(
+            matches!(inspect(&app, "wii"), Verdict::NotRom(r) if r.contains("application")),
+            "an emulator archive should be rejected"
+        );
+
+        let game = dir.join("New Super Mario Bros Wii.7z");
+        {
+            let mut w = sevenz_rust2::ArchiveWriter::create(&game).unwrap();
+            w.push_archive_entry(
+                sevenz_rust2::ArchiveEntry::new_file("New Super Mario Bros Wii.wbfs"),
+                Some(incompressible(4000).as_slice()),
+            )
+            .unwrap();
+            w.finish().unwrap();
+        }
+        assert_eq!(inspect(&game, "wii"), Verdict::Rom);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
     #[test]
     fn summarises_reasons_by_count() {
         let out = summarise(&[
@@ -270,3 +407,4 @@ mod tests {
         assert!(out.contains("1 × a BIOS or firmware file"));
     }
 }
+

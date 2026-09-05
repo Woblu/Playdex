@@ -10,7 +10,7 @@
 //! name exactly as the thumbnail server does. No account or key is needed.
 
 use crate::error::{AppError, Result};
-use crate::models::Cheat;
+use crate::models::{Cheat, Game};
 use crate::scrape::libretro;
 use std::path::{Path, PathBuf};
 
@@ -572,6 +572,97 @@ pub fn read_retroarch_config(exe: &Path) -> RetroArchCheats {
 
 /// Flip `apply_cheats_after_load` on. RetroArch rewrites its config when it
 /// exits, so this is only safe while it is closed — the caller checks.
+/// Write a game's switched-on cheats where RetroArch will look for them, and
+/// make sure RetroArch is actually set to apply them.
+///
+/// RetroArch files cheats by the *core's* display name, not the system's, and
+/// it reads its cheat folder from its own config — so both come from there
+/// rather than from a guess.
+///
+/// Returns `None` when there is nothing to do, so a launch can call this
+/// unconditionally without having to know whether cheats exist.
+pub fn sync_to_retroarch(conn: &rusqlite::Connection, game: &Game) -> Result<Option<String>> {
+    let cheats = crate::db::list_cheats(conn, game.id)?;
+    if cheats.is_empty() {
+        return Ok(None);
+    }
+    // Switching everything off must still write the file. Stopping here would
+    // leave the previous, still-enabled file in place and the cheats would
+    // stay on in game.
+
+    let retroarch = crate::db::get_setting(conn, "retroarch_path")?
+        .map(|p| crate::detect::clean_path(&p))
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| AppError::Other("Set the RetroArch path in Settings first".into()))?;
+    let exe = PathBuf::from(&retroarch);
+
+    let core = crate::launch::resolve_config(conn, &game.platform)
+        .core
+        .filter(|c| !c.is_empty())
+        .ok_or_else(|| {
+            AppError::Other(format!(
+                "No libretro core set for {} — cheats are filed per core",
+                crate::platforms::display_name(&game.platform)
+            ))
+        })?;
+
+    let config = read_retroarch_config(&exe);
+    let dir = config
+        .cheat_dir
+        .clone()
+        .map(PathBuf::from)
+        .or_else(|| cheat_dir(&exe, None))
+        .ok_or_else(|| AppError::Other("Could not work out RetroArch's cheat folder".into()))?;
+
+    let folder = core_folder_name(&core);
+    let written = write_file(&dir, &folder, &rom_name(game), &game.title, &cheats)?;
+
+    let on = cheats.iter().filter(|c| c.enabled).count();
+
+    // A cheat file RetroArch is not set to read is just a file. Turning the
+    // setting on is only worth doing when there is something to apply, and
+    // only at a moment RetroArch is not running — it rewrites its config on
+    // exit and would undo us.
+    let mut auto = String::new();
+    if on > 0 && !config.auto_apply {
+        match enable_auto_apply(&exe) {
+            Ok(_) => auto = " and turned on RetroArch's auto-apply".to_string(),
+            Err(e) => auto = format!(" (could not turn on auto-apply: {e})"),
+        }
+    }
+
+    let files = written
+        .iter()
+        .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let where_to = written
+        .first()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    Ok(Some(if on == 0 {
+        format!("All cheats cleared - wrote {files} in {where_to}")
+    } else {
+        format!(
+            "{on} cheat{} active - wrote {files} in {where_to}{auto}",
+            if on == 1 { "" } else { "s" }
+        )
+    }))
+}
+
+/// The ROM's own name, which is how the cheat database indexes it - not the
+/// cleaned-up display title.
+fn rom_name(game: &Game) -> String {
+    let raw = game.inner_name.as_deref().unwrap_or(&game.filename);
+    Path::new(raw)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(raw)
+        .to_string()
+}
+
 pub fn enable_auto_apply(exe: &Path) -> Result<String> {
     let path = config_path_for(exe)
         .ok_or_else(|| AppError::Other("Could not find retroarch.cfg".into()))?;
@@ -599,6 +690,91 @@ pub fn enable_auto_apply(exe: &Path) -> Result<String> {
 #[cfg(test)]
 mod retroarch_tests {
     use super::*;
+
+    /// The whole launch-time path: a game with cheats switched on gets a file
+    /// written into the right core folder, and RetroArch is switched over to
+    /// applying it — neither of which the user has to ask for.
+    #[test]
+    fn playing_a_game_writes_its_cheats_and_arms_retroarch() {
+        let dir = std::env::temp_dir().join(format!(
+            "playdex-sync-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+
+        // A RetroArch install with auto-apply switched off.
+        let exe = dir.join("retroarch.exe");
+        std::fs::write(&exe, b"stub").unwrap();
+        std::fs::write(
+            dir.join("retroarch.cfg"),
+            "apply_cheats_after_load = \"false\"
+cheat_database_path = \":\\cheats\"
+",
+        )
+        .unwrap();
+        std::fs::create_dir_all(dir.join("cheats")).unwrap();
+
+        let conn = crate::db::open(&dir.join("library.db")).unwrap();
+        crate::db::set_setting(&conn, "retroarch_path", &exe.to_string_lossy()).unwrap();
+        conn.execute(
+            "INSERT INTO games (id, path, filename, platform, title, size, added_at)
+             VALUES (1, ?1, 'Super Mario Bros. (World).nes', 'nes', 'Super Mario Bros.', 40976, 0)",
+            rusqlite::params![dir.join("Super Mario Bros. (World).nes").to_string_lossy()],
+        )
+        .unwrap();
+
+        crate::db::replace_cheats(
+            &conn,
+            1,
+            &[
+                Cheat { index: 0, description: "Infinite lives".into(), code: "SXIOPO".into(), enabled: false },
+                Cheat { index: 1, description: "Start on level 5".into(), code: "AATOZA".into(), enabled: false },
+            ],
+        )
+        .unwrap();
+        crate::db::set_cheat_enabled(&conn, 1, 0, true).unwrap();
+
+        let game = crate::db::get_game(&conn, 1).unwrap().unwrap();
+        let note = sync_to_retroarch(&conn, &game)
+            .expect("sync should succeed")
+            .expect("a game with cheats has something to write");
+
+        assert!(note.contains("1 cheat active"), "note was: {note}");
+        assert!(note.contains("auto-apply"), "note was: {note}");
+
+        // Filed under the *core's* display name, not the system's: NES
+        // defaults to mesen_libretro, which RetroArch calls "Mesen".
+        let written = dir.join("cheats").join("Mesen");
+        let files: Vec<String> = std::fs::read_dir(&written)
+            .expect("core folder should exist")
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().to_string())
+            .collect();
+        assert!(!files.is_empty(), "no cheat file written");
+
+        let body = std::fs::read_to_string(written.join(&files[0])).unwrap();
+        assert!(body.contains("SXIOPO"), "the enabled cheat is missing");
+
+        // ...and RetroArch will now actually read it.
+        assert!(read_retroarch_config(&exe).auto_apply);
+
+        // A game with no cheats recorded is simply nothing to do, so a launch
+        // can call this without checking first.
+        conn.execute(
+            "INSERT INTO games (id, path, filename, platform, title, size, added_at)
+             VALUES (2, 'x.nes', 'x.nes', 'nes', 'No Cheats', 1024, 0)",
+            [],
+        )
+        .unwrap();
+        let bare = crate::db::get_game(&conn, 2).unwrap().unwrap();
+        assert!(sync_to_retroarch(&conn, &bare).unwrap().is_none());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 
     #[test]
     fn maps_cores_to_the_folders_retroarch_uses() {

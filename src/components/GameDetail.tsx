@@ -534,56 +534,27 @@ export default function GameDetail({
             )}
 
             <div className="row" style={{ marginTop: 12 }}>
-              <button
-                className="btn small primary"
-                onClick={writeCheats}
-                disabled={cheatBusy}
-              >
-                Save to RetroArch
-              </button>
               <button className="btn small" onClick={searchCheats} disabled={cheatBusy}>
                 Refresh
               </button>
+              <button className="btn small" onClick={writeCheats} disabled={cheatBusy}>
+                Write now
+              </button>
             </div>
 
-            {raCheats && !raCheats.autoApply && (
-              <div
-                className="notice"
-                style={{ marginTop: 10, borderLeftColor: "var(--warn)" }}
-              >
-                <strong>Cheats will not apply on their own.</strong>
-                <div style={{ marginTop: 4 }}>
-                  RetroArch has "Auto-Apply Cheats During Game Load" switched
-                  off, so a saved cheat file just sits there.
-                </div>
-                <div className="row" style={{ marginTop: 10 }}>
-                  <button
-                    className="btn small"
-                    disabled={cheatBusy}
-                    onClick={async () => {
-                      setCheatError(null);
-                      try {
-                        await api.enableAutoApplyCheats();
-                        setRaCheats(await api.retroarchCheatStatus());
-                        setCheatNote("Auto-apply turned on in retroarch.cfg");
-                      } catch (e) {
-                        setCheatError(api.errorMessage(e));
-                      }
-                    }}
-                  >
-                    Turn on auto-apply
-                  </button>
-                  <span className="hint" style={{ flex: 1 }}>
-                    Close RetroArch first — it rewrites its config on exit.
-                  </span>
-                </div>
-              </div>
-            )}
-
             <div className="hint" style={{ marginTop: 6 }}>
-              Saving writes every name RetroArch might use for this ROM, so it
-              cannot load a stale file instead.
-              {raCheats?.autoApply && " Auto-apply is on."}
+              Whatever is switched on here is written to RetroArch when you
+              press Play, under every name RetroArch might use for this ROM, so
+              it cannot load a stale file instead. "Write now" is only needed if
+              you are launching from RetroArch directly rather than from here.
+              {raCheats && !raCheats.autoApply && activeCheats.length > 0 && (
+                <>
+                  {" "}
+                  RetroArch's "Auto-Apply Cheats During Game Load" is currently
+                  off; playing from here turns it on, since a cheat file it
+                  never reads would do nothing.
+                </>
+              )}
             </div>
           </>
         )}

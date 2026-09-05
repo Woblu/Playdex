@@ -82,6 +82,10 @@ export interface ScanProgress {
   message: string;
   added: number;
   skipped: number;
+  /** Entries already present that were re-detected and re-hashed. */
+  corrected: number;
+  /** Entries dropped because they are no longer recognised as games. */
+  dropped: number;
   /** Files that turned out not to be games at all. */
   ignored: number;
   /** Why they were ignored, grouped by reason. */

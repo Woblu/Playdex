@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Game {
     pub id: i64,
@@ -70,6 +70,10 @@ pub struct ScanProgress {
     pub message: String,
     pub added: usize,
     pub skipped: usize,
+    /// Entries already present that were re-detected and re-hashed.
+    pub corrected: usize,
+    /// Entries dropped because they are no longer recognised as games.
+    pub dropped: usize,
     /// Files that turned out not to be games at all.
     pub ignored: usize,
     /// Why they were ignored, grouped by reason.

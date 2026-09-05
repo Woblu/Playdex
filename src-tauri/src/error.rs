@@ -10,6 +10,8 @@ pub enum AppError {
     Http(#[from] reqwest::Error),
     #[error("archive error: {0}")]
     Zip(#[from] zip::result::ZipError),
+    #[error("archive error: {0}")]
+    SevenZ(#[from] sevenz_rust2::Error),
     #[error("tauri error: {0}")]
     Tauri(#[from] tauri::Error),
     #[error("{0}")]

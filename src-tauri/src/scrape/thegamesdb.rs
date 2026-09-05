@@ -176,23 +176,23 @@ pub async fn lookup(client: &reqwest::Client, creds: &Credentials, game: &Game) 
     let plat_table = tgdb_platforms(client, &creds.tgdb_key).await;
 
     // Rank candidates by title closeness, boosted when the platform agrees.
-    let mut best: Option<(&Value, i32)> = None;
+    let mut best: Option<(&Value, i32, Option<&'static str>)> = None;
     for g in games {
         let title = g.get("game_title").and_then(|t| t.as_str()).unwrap_or("");
-        let platform_matches = g
+        let slug = g
             .get("platform")
             .and_then(|p| p.as_i64())
             .and_then(|id| plat_table.get(&id))
             .and_then(|name| platforms::match_alias(name))
-            .map(|p| p.slug == game.platform)
-            .unwrap_or(false);
+            .map(|p| p.slug);
+        let platform_matches = slug == Some(game.platform.as_str());
         let s = score(title, &wanted, platform_matches);
-        if best.map_or(true, |(_, bs)| s > bs) {
-            best = Some((g, s));
+        if best.map_or(true, |(_, bs, _)| s > bs) {
+            best = Some((g, s, slug));
         }
     }
 
-    let Some((hit, best_score)) = best else {
+    let Some((hit, best_score, hit_platform)) = best else {
         return Outcome::NotFound;
     };
     // A name-only provider guessing wildly is worse than no metadata.
@@ -225,6 +225,7 @@ pub async fn lookup(client: &reqwest::Client, creds: &Credentials, game: &Game) 
             .and_then(|t| t.as_str())
             .map(|s| s.to_string()),
         players: hit.get("players").and_then(|p| p.as_i64()).map(|p| p.to_string()),
+        platform: hit_platform.map(|s| s.to_string()),
         // TheGamesDB's "rating" is an age rating, not a score.
         rating: None,
         cover_url,

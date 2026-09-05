@@ -13,13 +13,25 @@ import type {
   Settings,
 } from "../types";
 
-type Tab = "folders" | "emulators" | "metadata" | "hacks";
+import { SKINS, isSkin, DEFAULT_SKIN, type SkinName } from "../skins/shell";
+import {
+  checkForUpdate,
+  currentVersion,
+  formatBytes,
+  installUpdate,
+  type DownloadState,
+  type UpdateInfo,
+} from "../update";
+
+type Tab = "folders" | "emulators" | "metadata" | "hacks" | "appearance";
 
 interface Props {
   onClose: () => void;
+  /** Applied at once, so the picker is its own preview. */
+  onSkinChange: (skin: SkinName) => void;
 }
 
-export default function SettingsModal({ onClose }: Props) {
+export default function SettingsModal({ onClose, onSkinChange }: Props) {
   const [tab, setTab] = useState<Tab>("folders");
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([]);
@@ -40,6 +52,11 @@ export default function SettingsModal({ onClose }: Props) {
   const [detecting, setDetecting] = useState(false);
   const [providers, setProviders] = useState<ProviderStatus[] | null>(null);
   const [testing, setTesting] = useState(false);
+  const [version, setVersion] = useState("");
+  const [update, setUpdate] = useState<UpdateInfo | null>(null);
+  const [updateNote, setUpdateNote] = useState<string | null>(null);
+  const [checking, setChecking] = useState(false);
+  const [download, setDownload] = useState<DownloadState>({ phase: "idle" });
 
   const reload = async () => {
     try {
@@ -180,6 +197,37 @@ export default function SettingsModal({ onClose }: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, settings.retroarch_path]);
 
+  useEffect(() => {
+    void currentVersion().then(setVersion);
+  }, []);
+
+  const runUpdateCheck = async () => {
+    setChecking(true);
+    setUpdateNote(null);
+    setUpdate(null);
+    try {
+      const found = await checkForUpdate(true);
+      if (found) setUpdate(found);
+      else setUpdateNote("Playdex is up to date.");
+    } catch (err) {
+      // A button press deserves the real reason — no endpoint yet, no
+      // network, a release without a manifest.
+      setUpdateNote(`Could not check: ${api.errorMessage(err)}`);
+    } finally {
+      setChecking(false);
+    }
+  };
+
+  const runUpdateInstall = async () => {
+    if (!update) return;
+    setDownload({ phase: "downloading", received: 0, total: null });
+    try {
+      await installUpdate(update, setDownload);
+    } catch (err) {
+      setDownload({ phase: "failed", message: api.errorMessage(err) });
+    }
+  };
+
   const setValue = (key: string, value: string) =>
     setSettings((prev) => ({ ...prev, [key]: value }));
 
@@ -230,7 +278,9 @@ export default function SettingsModal({ onClose }: Props) {
         <div className="modal-head">Settings</div>
 
         <div className="tabs">
-          {(["folders", "emulators", "metadata", "hacks"] as Tab[]).map((t) => (
+          {(
+            ["folders", "emulators", "metadata", "hacks", "appearance"] as Tab[]
+          ).map((t) => (
             <button
               key={t}
               className={`tab ${tab === t ? "active" : ""}`}
@@ -242,7 +292,9 @@ export default function SettingsModal({ onClose }: Props) {
                   ? "Emulators"
                   : t === "metadata"
                     ? "Metadata"
-                    : "ROM hacks"}
+                    : t === "hacks"
+                      ? "ROM hacks"
+                      : "Appearance"}
             </button>
           ))}
         </div>
@@ -594,6 +646,116 @@ export default function SettingsModal({ onClose }: Props) {
               </div>
             </>
           )}
+          {tab === "appearance" && (
+            <>
+              <div className="notice">
+                The same library, laid out for wherever you are using it. All
+                three show the same games and share the same settings — only
+                the shape changes.
+              </div>
+
+              <div className="skin-picker">
+                {SKINS.map((option) => {
+                  const current = isSkin(settings.ui_skin)
+                    ? settings.ui_skin
+                    : DEFAULT_SKIN;
+                  return (
+                    <button
+                      key={option.value}
+                      className={`skin-option ${current === option.value ? "on" : ""}`}
+                      onClick={async () => {
+                        const next = { ...settings, ui_skin: option.value };
+                        setSettings(next);
+                        onSkinChange(option.value);
+                        try {
+                          await api.saveSettings(next);
+                        } catch (err) {
+                          setError(api.errorMessage(err));
+                        }
+                      }}
+                    >
+                      <SkinPreview skin={option.value} />
+                      <div className="skin-name">{option.label}</div>
+                      <div className="skin-blurb">{option.blurb}</div>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="section-title">About</div>
+              <div className="about-row">
+                <div>
+                  <div className="about-version">Playdex {version || "…"}</div>
+                  <div className="hint">
+                    Updates are downloaded from the project&apos;s releases and
+                    checked against a signature before anything is installed.
+                  </div>
+                </div>
+                <button
+                  className="btn small"
+                  onClick={() => void runUpdateCheck()}
+                  disabled={checking || download.phase !== "idle"}
+                >
+                  {checking ? "Checking…" : "Check for updates"}
+                </button>
+              </div>
+
+              {updateNote && <div className="hint">{updateNote}</div>}
+
+              {update && (
+                <div className="notice" style={{ marginTop: 10 }}>
+                  <strong>Playdex {update.version} is available.</strong>
+                  {update.notes && (
+                    <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
+                      {update.notes}
+                    </div>
+                  )}
+
+                  {download.phase === "failed" && (
+                    <div className="error-banner" style={{ marginTop: 8 }}>
+                      {download.message}
+                    </div>
+                  )}
+
+                  {download.phase === "downloading" ||
+                  download.phase === "installing" ? (
+                    <div className="hint" style={{ marginTop: 8 }}>
+                      {download.phase === "installing"
+                        ? "Installing — Playdex will restart."
+                        : download.total
+                          ? `Downloading ${formatBytes(download.received)} of ${formatBytes(download.total)}…`
+                          : `Downloading ${formatBytes(download.received)}…`}
+                    </div>
+                  ) : (
+                    <button
+                      className="btn small primary"
+                      style={{ marginTop: 10 }}
+                      onClick={() => void runUpdateInstall()}
+                    >
+                      Update and restart
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="section-title">Controller</div>
+              <div className="hint">
+                A pad is picked up on its own — no pairing step here. The
+                D-pad or left stick moves between whatever is on screen,
+                including this window; the focus ring thickens while a
+                controller is connected so it can be seen from a sofa.
+              </div>
+              <div className="pad-legend">
+                <span><b>A</b> Play, or press what is focused</span>
+                <span><b>B</b> Back / close</span>
+                <span><b>X</b> Open a game&apos;s panel</span>
+                <span><b>Y</b> Favourite</span>
+                <span><b>LB</b> / <b>RB</b> Previous / next system</span>
+                <span><b>Start</b> Play the selected game</span>
+              </div>
+            </>
+          )}
+
           {tab === "hacks" && (
             <>
               <div className="notice">
@@ -739,5 +901,70 @@ export default function SettingsModal({ onClose }: Props) {
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * A wireframe of each layout, so the choice can be made by eye rather than by
+ * reading three descriptions and guessing. Drawn rather than screenshotted —
+ * a thumbnail stays right when the skin changes.
+ */
+function SkinPreview({ skin }: { skin: SkinName }) {
+  const box = (
+    x: number,
+    y: number,
+    w: number,
+    h: number,
+    fill: string,
+    rx = 1.5,
+  ) => <rect key={`${x}-${y}-${w}`} x={x} y={y} width={w} height={h} rx={rx} fill={fill} />;
+
+  return (
+    <svg className="skin-thumb" viewBox="0 0 100 60" role="img" aria-hidden="true">
+      {skin === "launchbox" && (
+        <>
+          {box(0, 0, 100, 60, "#151920", 3)}
+          {box(4, 4, 22, 52, "#1b2028", 2)}
+          {box(30, 4, 66, 7, "#1b2028")}
+          {[0, 1, 2, 3].map((i) =>
+            box(30 + (i % 4) * 17, 15, 14, 16, "#2b3441"),
+          )}
+          {[0, 1, 2, 3].map((i) =>
+            box(30 + (i % 4) * 17, 34, 14, 16, "#2b3441"),
+          )}
+        </>
+      )}
+
+      {skin === "switch" && (
+        <>
+          {box(0, 0, 100, 60, "#2a2a2e", 3)}
+          {box(4, 4, 92, 6, "#3a3a40")}
+          {box(6, 16, 12, 3, "#a0a0a8", 1)}
+          {[0, 1, 2, 3].map((i) => box(6 + i * 22, 24, 18, 18, "#3a3a40", 2))}
+          <rect
+            x={27}
+            y={22}
+            width={22}
+            height={22}
+            rx={2.5}
+            fill="#3a3a40"
+            stroke="#00c3e3"
+            strokeWidth={2}
+          />
+          {box(4, 50, 92, 6, "#3a3a40")}
+        </>
+      )}
+
+      {skin === "steam" && (
+        <>
+          {box(0, 0, 100, 60, "#10161f", 3)}
+          {box(0, 0, 24, 60, "#0a0f16", 3)}
+          {box(24, 0, 76, 26, "#22405f")}
+          {box(29, 17, 20, 5, "#4c9be8", 1.5)}
+          {[0, 1, 2, 3].map((i) => box(29 + i * 17, 32, 13, 20, "#182231"))}
+          {box(24, 55, 76, 5, "#0d131b", 0)}
+        </>
+      )}
+    </svg>
   );
 }

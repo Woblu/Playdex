@@ -37,16 +37,29 @@ pub const PLATFORMS: &[PlatformDef] = &[
     PlatformDef {
         slug: "gamecube",
         name: "Nintendo GameCube",
-        exts: &["gcm", "gcz", "rvz"],
+        exts: &["gcm", "gcz", "rvz", "wia"],
         aliases: &["gamecube", "ngc", "gcn"],
         cores: &["dolphin_libretro"],
     },
     PlatformDef {
         slug: "wii",
         name: "Nintendo Wii",
-        exts: &["wbfs", "wad"],
+        // Dolphin's own container formats hold either a GameCube or a Wii
+        // disc, so gcz/rvz/wia are claimed by both systems and land in the
+        // ambiguous path rather than settling on GameCube by accident.
+        exts: &["wbfs", "wad", "gcz", "rvz", "wia"],
         aliases: &["wii"],
         cores: &["dolphin_libretro"],
+    },
+    PlatformDef {
+        slug: "switch",
+        name: "Nintendo Switch",
+        exts: &["nsp", "xci", "nro"],
+        aliases: &["switch", "nintendo switch", "nsw"],
+        // No libretro core exists for the Switch. Point this system at a
+        // standalone emulator under Settings -> Emulators; an empty core list
+        // is what makes launching say so rather than blaming your setup.
+        cores: &[],
     },
     PlatformDef {
         slug: "gb",
@@ -290,13 +303,16 @@ pub const PLATFORMS: &[PlatformDef] = &[
 /// parent directory name instead.
 pub const AMBIGUOUS_EXTS: &[&str] = &[
     "cue", "bin", "iso", "chd", "img", "ccd", "mds", "m3u", "toc", "nrg", "rom", "dsk",
+    // Compressed ISO: PSP, PS2, GameCube and Wii all use the name.
+    "ciso",
 ];
 
 /// Archives we can look inside to find the real ROM.
-pub const ARCHIVE_EXTS: &[&str] = &["zip"];
+pub const ARCHIVE_EXTS: &[&str] = &["zip", "7z"];
 
-/// Archives we index but cannot read into (no bundled extractor).
-pub const OPAQUE_ARCHIVE_EXTS: &[&str] = &["7z", "rar"];
+/// Archives we index but cannot read into (no bundled extractor), so the file
+/// on disk gets hashed as-is and the platform has to come from its name.
+pub const OPAQUE_ARCHIVE_EXTS: &[&str] = &["rar"];
 
 pub fn by_slug(slug: &str) -> Option<&'static PlatformDef> {
     PLATFORMS.iter().find(|p| p.slug == slug)
@@ -343,6 +359,38 @@ pub fn match_alias(text: &str) -> Option<&'static PlatformDef> {
     best.map(|(p, _)| p)
 }
 
+/// Match free text against platform aliases, but only on whole words.
+///
+/// `match_alias` accepts a bare substring, which is fine for a directory the
+/// user named after a system but far too loose for a game title: "Legbreaker"
+/// contains "gb", "Dosbox Adventures" contains "dos". Here an alias has to
+/// line up with word boundaries, so only a title that genuinely names its
+/// system matches. The longest alias still wins.
+pub fn match_alias_word(text: &str) -> Option<&'static PlatformDef> {
+    let words: Vec<String> = text
+        .split(|c: char| !c.is_alphanumeric())
+        .filter(|w| !w.is_empty())
+        .map(|w| w.to_ascii_lowercase())
+        .collect();
+    if words.is_empty() {
+        return None;
+    }
+    // Pad so a single `contains` is a word-boundary test for multi-word
+    // aliases ("nintendo 64") as well as single-word ones.
+    let padded = format!(" {} ", words.join(" "));
+
+    let mut best: Option<(&'static PlatformDef, usize)> = None;
+    for p in PLATFORMS {
+        for alias in p.aliases {
+            let a = alias.to_ascii_lowercase();
+            if padded.contains(&format!(" {a} ")) && best.map_or(true, |(_, len)| a.len() > len) {
+                best = Some((p, a.len()));
+            }
+        }
+    }
+    best.map(|(p, _)| p)
+}
+
 /// True if we should even consider indexing this file.
 pub fn is_indexable_ext(ext: &str) -> bool {
     let e = ext.to_ascii_lowercase();
@@ -355,4 +403,63 @@ pub fn is_indexable_ext(ext: &str) -> bool {
 /// True if this extension alone identifies exactly one platform.
 pub fn is_unique_ext(ext: &str) -> bool {
     candidates_for_ext(ext).len() == 1
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn word_matching_ignores_letters_inside_other_words() {
+        // The loose matcher is happy to find a system inside any old word —
+        // "Legbreaker" reads as Game Boy — which is why titles get the
+        // strict one.
+        assert_eq!(match_alias("Legbreaker").map(|p| p.slug), Some("gb"));
+        assert_eq!(match_alias_word("Legbreaker").map(|p| p.slug), None);
+
+        // Punctuation still separates words, so a real mention is not lost.
+        assert_eq!(
+            match_alias_word("Metroid_Prime(GameCube).iso").map(|p| p.slug),
+            Some("gamecube")
+        );
+    }
+
+    #[test]
+    fn word_matching_finds_a_system_the_title_actually_names() {
+        assert_eq!(
+            match_alias_word("New Super Mario Bros Wii [SMNE01].7z").map(|p| p.slug),
+            Some("wii")
+        );
+        assert_eq!(
+            match_alias_word("Sonic 3 (Mega Drive).bin").map(|p| p.slug),
+            Some("genesis")
+        );
+        // Longest alias wins, so this is Super Nintendo rather than plain NES.
+        assert_eq!(
+            match_alias_word("Super Nintendo - Super Metroid").map(|p| p.slug),
+            Some("snes")
+        );
+        assert_eq!(match_alias_word("Chrono Trigger").map(|p| p.slug), None);
+    }
+
+    #[test]
+    fn dolphin_containers_belong_to_both_nintendo_discs() {
+        // rvz/gcz/wia hold either disc, so neither system may claim them
+        // outright — otherwise a Wii dump silently files itself as GameCube.
+        for ext in ["rvz", "gcz", "wia"] {
+            let slugs: Vec<&str> = candidates_for_ext(ext).iter().map(|p| p.slug).collect();
+            assert_eq!(slugs, vec!["gamecube", "wii"], "{ext}");
+            assert!(!is_unique_ext(ext), "{ext}");
+        }
+        // wbfs is Wii's alone and should still settle on sight.
+        assert!(is_unique_ext("wbfs"));
+    }
+
+    #[test]
+    fn seven_zip_is_readable_rather_than_opaque() {
+        assert!(ARCHIVE_EXTS.contains(&"7z"));
+        assert!(!OPAQUE_ARCHIVE_EXTS.contains(&"7z"));
+        assert!(is_indexable_ext("7z"));
+        assert!(is_indexable_ext("rar"));
+    }
 }

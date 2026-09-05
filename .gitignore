@@ -31,3 +31,7 @@ dist-ssr
 
 # Local scratch
 *.log
+
+# Updater signing keys, if one is ever generated in-tree by accident.
+*.key
+*.key.pub

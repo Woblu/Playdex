@@ -9,6 +9,7 @@ use serde_json::Value;
 
 use super::{Credentials, GameMeta, Outcome};
 use crate::models::Game;
+use crate::platforms;
 
 const BASE: &str = "https://api.screenscraper.fr/api2/jeuInfos.php";
 const SOFTNAME: &str = "playdex";
@@ -226,6 +227,10 @@ pub async fn lookup(client: &reqwest::Client, creds: &Credentials, game: &Game) 
         genre: genres(jeu, &langs),
         release_date: pick_by_region(jeu.get("dates"), &regions),
         players: text_field(jeu, "joueurs"),
+        platform: text_field(jeu, "systeme")
+            .as_deref()
+            .and_then(platforms::match_alias)
+            .map(|p| p.slug.to_string()),
         rating,
         cover_url: media_url(jeu, &["box-2D", "box-3D", "mixrbv1"], &regions),
         screenshot_url: media_url(jeu, &["ss", "sstitle"], &regions),

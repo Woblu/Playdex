@@ -8,6 +8,7 @@ import type {
   LibraryInsights,
   LibraryStats,
   Cheat,
+  ScanProgress,
   DetectedEmulator,
   HackBundle,
   HomebrewDetail,
@@ -65,7 +66,7 @@ export const pickFile = () => invoke<string | null>("pick_file");
 
 // ---------------------------------------------------------------- scan
 
-export const scanLibrary = () => invoke<unknown>("scan_library");
+export const scanLibrary = () => invoke<ScanProgress>("scan_library");
 
 export const cleanMissing = () => invoke<number>("clean_missing");
 

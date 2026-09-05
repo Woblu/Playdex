@@ -144,12 +144,11 @@ pub async fn scan_library(app: AppHandle) -> Result<ScanProgress> {
         phase: "done".into(),
         current: 0,
         total: 0,
-        message: format!(
-            "Added {}, skipped {}, ignored {}",
-            tally.added, tally.skipped, tally.ignored
-        ),
+        message: tally.message(),
         added: tally.added,
         skipped: tally.skipped,
+        corrected: tally.reindexed,
+        dropped: tally.dropped,
         ignored: tally.ignored,
         ignored_summary: tally.summary(),
         done: true,
@@ -318,15 +317,29 @@ pub fn launch_game(app: AppHandle, db: State<Db>, id: i64) -> Result<()> {
         let conn = db.0.lock().unwrap();
         db::get_game(&conn, id)?.ok_or_else(|| AppError::Other("Game not found".into()))?
     };
-    launch::launch(&app, &db.0, &game)
+    let cache_root = app.state::<AppState>().media_root.clone();
+    launch::launch(&app, &db.0, &game, &cache_root)
 }
 
 /// Show what would run, so a misconfigured emulator is obvious before launch.
 #[tauri::command]
-pub fn preview_launch(db: State<Db>, id: i64) -> Result<String> {
+pub fn preview_launch(app: AppHandle, db: State<Db>, id: i64) -> Result<String> {
     let conn = db.0.lock().unwrap();
     let game = db::get_game(&conn, id)?.ok_or_else(|| AppError::Other("Game not found".into()))?;
-    let (exe, args) = launch::build_command(&conn, &game)?;
+
+    // Show the path the emulator will really be given, without unpacking
+    // anything just to draw a line of text.
+    let cache_root = app.state::<AppState>().media_root.clone();
+    let accepts = db::get_setting(&conn, "retroarch_path")?
+        .map(|p| crate::detect::clean_path(&p))
+        .filter(|p| !p.is_empty())
+        .and_then(|p| {
+            let core = launch::resolve_config(&conn, &game.platform).core?;
+            launch::core_extensions(std::path::Path::new(&p), &core)
+        });
+    let rom = launch::preview_rom_path(&game, &cache_root, accepts.as_deref());
+
+    let (exe, args) = launch::build_command(&conn, &game, &rom)?;
     let quoted: Vec<String> = args
         .iter()
         .map(|a| {
@@ -821,79 +834,18 @@ pub fn set_all_cheats(db: State<Db>, game_id: i64, enabled: bool) -> Result<Vec<
     db::list_cheats(&conn, game_id)
 }
 
-/// Write the switched-on cheats where RetroArch will actually look for them.
+/// Write the switched-on cheats to RetroArch by hand.
 ///
-/// RetroArch files cheats by the *core's* display name, not the system's, and
-/// it reads its cheat folder from its own config — so both come from there
-/// rather than from a guess.
+/// Playing a game does this on its own; this is for prepping a ROM you intend
+/// to launch from RetroArch directly.
 #[tauri::command]
 pub fn save_cheats(db: State<Db>, game_id: i64) -> Result<String> {
     let conn = db.0.lock().unwrap();
-
     let game = db::get_game(&conn, game_id)?
         .ok_or_else(|| AppError::Other("Game not found".into()))?;
-    let cheats = db::list_cheats(&conn, game_id)?;
-    if cheats.is_empty() {
-        return Err(AppError::Other(
-            "No cheats found for this game yet — press Find cheats first".into(),
-        ));
-    }
-    // Switching everything off must still write the file. Refusing here would
-    // leave the previous, still-enabled file in place and the cheats would
-    // stay on in game.
 
-    let retroarch = db::get_setting(&conn, "retroarch_path")?
-        .map(|p| crate::detect::clean_path(&p))
-        .filter(|p| !p.is_empty())
-        .ok_or_else(|| AppError::Other("Set the RetroArch path in Settings first".into()))?;
-    let exe = std::path::PathBuf::from(&retroarch);
-
-    let core = launch::resolve_config(&conn, &game.platform)
-        .core
-        .filter(|c| !c.is_empty())
-        .ok_or_else(|| {
-            AppError::Other(format!(
-                "No libretro core set for {} — cheats are filed per core",
-                platforms::display_name(&game.platform)
-            ))
-        })?;
-
-    let config = crate::cheats::read_retroarch_config(&exe);
-    let dir = config
-        .cheat_dir
-        .clone()
-        .map(std::path::PathBuf::from)
-        .or_else(|| crate::cheats::cheat_dir(&exe, None))
-        .ok_or_else(|| AppError::Other("Could not work out RetroArch's cheat folder".into()))?;
-
-    let folder = crate::cheats::core_folder_name(&core);
-    let written = crate::cheats::write_file(
-        &dir,
-        &folder,
-        &rom_name_of(&game),
-        &game.title,
-        &cheats,
-    )?;
-
-    let on = cheats.iter().filter(|c| c.enabled).count();
-    let files = written
-        .iter()
-        .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
-        .collect::<Vec<_>>()
-        .join(", ");
-    let where_to = written
-        .first()
-        .and_then(|p| p.parent())
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
-
-    Ok(if on == 0 {
-        format!("All cheats cleared — wrote {files} in {where_to}")
-    } else {
-        format!(
-            "{on} cheat{} active — wrote {files} in {where_to}",
-            if on == 1 { "" } else { "s" }
-        )
+    crate::cheats::sync_to_retroarch(&conn, &game)?.ok_or_else(|| {
+        AppError::Other("No cheats found for this game yet - press Find cheats first".into())
     })
 }
 

@@ -35,6 +35,9 @@ pub struct GameMeta {
     pub cover_url: Option<String>,
     pub screenshot_url: Option<String>,
     pub logo_url: Option<String>,
+    /// The system the provider says this is, as one of our slugs. Only used
+    /// to fill in a platform we failed to work out ourselves.
+    pub platform: Option<String>,
 }
 
 #[derive(Debug)]
@@ -217,6 +220,17 @@ async fn store(
     };
 
     let guard = conn.lock().unwrap();
+    // A provider that identified the game knows its system, so let it settle a
+    // platform we could not work out from the file. Only when we have nothing:
+    // a platform already on the record may have been set by hand, and a
+    // name-matched provider is not evidence enough to overrule that.
+    if game.platform == "unknown" {
+        if let Some(slug) = meta.platform.as_deref() {
+            // Sets scrape_status back to 'pending'; apply_metadata below puts
+            // it straight to 'ok', so this does not queue a second scrape.
+            db::set_platform(&guard, game.id, slug)?;
+        }
+    }
     db::apply_metadata(&guard, game.id, &record)?;
     Ok(())
 }

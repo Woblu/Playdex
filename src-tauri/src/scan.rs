@@ -80,7 +80,8 @@ pub fn guess_region(filename: &str) -> Option<String> {
 ///
 /// Extensions alone are not enough — `.bin`, `.cue`, `.iso` and `.zip` are
 /// shared across a dozen systems — so this falls back to the folder's assigned
-/// platform, then to directory names, then to what is inside the archive.
+/// platform, then to what is inside the archive, then to directory names, and
+/// finally to the ROM's own name.
 pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) -> String {
     if let Some(p) = folder_override.filter(|p| !p.is_empty()) {
         return p.to_string();
@@ -98,9 +99,10 @@ pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) 
         return candidates[0].slug.to_string();
     }
 
-    // 2. For a zip, look at what is inside.
+    // 2. For an archive, look at what is inside.
+    let mut inner_names: Vec<String> = Vec::new();
     if platforms::ARCHIVE_EXTS.contains(&ext.as_str()) {
-        if let Ok(names) = hashing::zip_entry_names(path) {
+        if let Ok(names) = hashing::archive_entry_names(path) {
             for name in &names {
                 let inner_ext = Path::new(name)
                     .extension()
@@ -112,6 +114,7 @@ pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) 
                     return inner[0].slug.to_string();
                 }
             }
+            inner_names = names;
         }
     }
 
@@ -136,7 +139,19 @@ pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) 
         }
     }
 
-    // 4. Extension shared by a few systems and nothing else to go on: take the
+    // 4. The ROM's own name, and the names inside the archive. Dumps are
+    //    routinely called "Mario Kart Wii" or "Sonic (Mega Drive)", which is
+    //    the last real evidence available for a container extension like .7z
+    //    that belongs to no system at all. Matched on whole words only, so a
+    //    title is not mistaken for a system it merely contains the letters of.
+    let own_name = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+    for name in std::iter::once(own_name).chain(inner_names.iter().map(|s| s.as_str())) {
+        if let Some(p) = platforms::match_alias_word(name) {
+            return p.slug.to_string();
+        }
+    }
+
+    // 5. Extension shared by a few systems and nothing else to go on: take the
     //    first candidate rather than dropping the ROM entirely.
     if let Some(first) = candidates.first() {
         return first.slug.to_string();
@@ -149,12 +164,44 @@ pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) 
 pub struct ScanTally {
     pub added: usize,
     pub skipped: usize,
+    /// Entries already in the library that were corrected on this pass.
+    pub reindexed: usize,
+    /// Entries dropped because they are no longer recognised as games. The
+    /// file on disk is never touched.
+    pub dropped: usize,
     /// Files that were not games at all.
     pub ignored: usize,
     reasons: Vec<String>,
 }
 
+/// Whether an entry already in the library was indexed under a rule we have
+/// since fixed, and so deserves another look.
+///
+/// Two cases, both cheap to spot: a platform we never worked out, and an
+/// archive we recorded without ever opening — its stored hashes are the
+/// container's, which match nothing in a scraper or a DAT.
+fn needs_reindex(state: &db::IndexState, ext: &str) -> bool {
+    state.platform == "unknown"
+        || (platforms::ARCHIVE_EXTS.contains(&ext) && state.inner_name.is_none())
+}
+
 impl ScanTally {
+    /// The one-line summary of a finished scan, so the progress event and the
+    /// command's return value can never drift apart.
+    pub fn message(&self) -> String {
+        let mut out = format!(
+            "Added {}, skipped {}, ignored {}",
+            self.added, self.skipped, self.ignored
+        );
+        if self.reindexed > 0 {
+            out.push_str(&format!(", corrected {}", self.reindexed));
+        }
+        if self.dropped > 0 {
+            out.push_str(&format!(", dropped {}", self.dropped));
+        }
+        out
+    }
+
     pub fn summary(&self) -> String {
         if self.reasons.is_empty() {
             String::new()
@@ -183,6 +230,8 @@ fn emit(
             message: message.to_string(),
             added: tally.added,
             skipped: tally.skipped,
+            corrected: tally.reindexed,
+            dropped: tally.dropped,
             ignored: tally.ignored,
             ignored_summary: tally.summary(),
             done,
@@ -201,7 +250,7 @@ pub fn scan_all(
 ) -> Result<ScanTally> {
     let (folders, known) = {
         let conn = db_handle.lock().unwrap();
-        (db::list_folders(&conn)?, db::all_paths(&conn)?)
+        (db::list_folders(&conn)?, db::index_state(&conn)?)
     };
 
     let mut tally = ScanTally::default();
@@ -218,10 +267,23 @@ pub fn scan_all(
             .follow_links(false)
             .into_iter()
             .filter_entry(|e| {
-                !e.file_name()
+                let hidden = e
+                    .file_name()
                     .to_str()
                     .map(|s| s.starts_with('.') || s.eq_ignore_ascii_case("$RECYCLE.BIN"))
-                    .unwrap_or(false)
+                    .unwrap_or(false);
+                if hidden {
+                    return false;
+                }
+                // An emulator unpacked into the library is not a ROM folder.
+                // Skipping it at its root drops its Sys and data directories
+                // with it, which is where the firmware and fonts that read as
+                // ROMs actually live. Never applied to the library root
+                // itself, which the user chose deliberately.
+                if e.depth() > 0 && e.file_type().is_dir() && romcheck::holds_a_program(e.path()) {
+                    return false;
+                }
+                true
             })
             .filter_map(|e| e.ok())
         {
@@ -256,8 +318,58 @@ pub fn scan_all(
             .unwrap_or("")
             .to_string();
 
-        if known.contains(&path_str) {
-            tally.skipped += 1;
+        if let Some(state) = known.get(&path_str) {
+            let ext = path
+                .extension()
+                .and_then(|e| e.to_str())
+                .unwrap_or("")
+                .to_ascii_lowercase();
+
+            // An entry the scanner itself added and now recognises as a
+            // mistake — an emulator's firmware, an application archive — is
+            // dropped from the library. The file on disk is untouched, and
+            // anything you have played, favourited or built a hack on is left
+            // alone however it now reads: a heuristic is not allowed to throw
+            // away something you have shown you care about.
+            if !state.precious {
+                if let romcheck::Verdict::NotRom(reason) = romcheck::inspect(path, &state.platform)
+                {
+                    let conn = db_handle.lock().unwrap();
+                    db::remove_game(&conn, state.id)?;
+                    drop(conn);
+                    tally.dropped += 1;
+                    tally.reasons.push(reason);
+                    if i % 5 == 0 || i + 1 == total {
+                        emit(app, "hashing", i + 1, total, &filename, &tally, false);
+                    }
+                    continue;
+                }
+            }
+
+            if needs_reindex(state, &ext) {
+                let platform = detect_platform(path, root, override_platform.as_deref());
+                let hashes = hashing::hash_rom(path).ok().flatten();
+                let size = hashes
+                    .as_ref()
+                    .map(|h| h.size as i64)
+                    .or_else(|| std::fs::metadata(path).ok().map(|m| m.len() as i64))
+                    .unwrap_or(0);
+
+                let conn = db_handle.lock().unwrap();
+                db::reindex_game(
+                    &conn,
+                    state.id,
+                    &platform,
+                    size,
+                    hashes.as_ref().map(|h| h.crc32.as_str()),
+                    hashes.as_ref().map(|h| h.md5.as_str()),
+                    hashes.as_ref().map(|h| h.sha1.as_str()),
+                    hashes.as_ref().and_then(|h| h.inner_name.as_deref()),
+                )?;
+                tally.reindexed += 1;
+            } else {
+                tally.skipped += 1;
+            }
         } else {
             let platform = detect_platform(path, root, override_platform.as_deref());
 
@@ -316,10 +428,7 @@ pub fn scan_all(
         }
     }
 
-    let message = format!(
-        "Added {}, skipped {}, ignored {}",
-        tally.added, tally.skipped, tally.ignored
-    );
+    let message = tally.message();
     emit(app, "done", total, total, &message, &tally, true);
 
     Ok(tally)
@@ -337,3 +446,62 @@ pub fn remove_missing(conn: &rusqlite::Connection) -> Result<usize> {
     }
     Ok(removed)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn folder_assignment_beats_everything() {
+        let root = Path::new("C:/roms");
+        let p = Path::new("C:/roms/Wii/Mario Kart Wii.iso");
+        assert_eq!(detect_platform(p, root, Some("gamecube")), "gamecube");
+    }
+
+    #[test]
+    fn a_unique_extension_settles_it() {
+        let root = Path::new("C:/roms");
+        let p = Path::new("C:/roms/anything/Super Metroid.sfc");
+        assert_eq!(detect_platform(p, root, None), "snes");
+    }
+
+    #[test]
+    fn a_directory_named_after_a_system_wins_over_the_title() {
+        let root = Path::new("C:/roms");
+        // The file says Wii; the folder the user made says GameCube. Their
+        // own filing is the better evidence.
+        let p = Path::new("C:/roms/GameCube/Wii Play.iso");
+        assert_eq!(detect_platform(p, root, None), "gamecube");
+    }
+
+    /// The case this was written for: a 7z belongs to no system by extension,
+    /// sits in a folder named nothing in particular, and the only thing left
+    /// saying "Wii" is the filename.
+    #[test]
+    fn falls_back_to_the_roms_own_name() {
+        let root = Path::new("C:/roms");
+        let p = Path::new("C:/roms/Retro Folders/New Super Mario Bros Wii [SMNE01].7z");
+        assert_eq!(detect_platform(p, root, None), "wii");
+    }
+
+    #[test]
+    fn a_nameless_container_is_still_unidentified() {
+        let root = Path::new("C:/roms");
+        let p = Path::new("C:/roms/Retro Folders/Some Game.7z");
+        assert_eq!(detect_platform(p, root, None), "unknown");
+    }
+
+    #[test]
+    fn an_ambiguous_extension_takes_its_first_candidate() {
+        let root = Path::new("C:/roms");
+        // rvz is shared by GameCube and Wii; with nothing else to go on it
+        // lands on the first rather than being dropped.
+        let p = Path::new("C:/roms/discs/Some Game.rvz");
+        assert_eq!(detect_platform(p, root, None), "gamecube");
+        // ...but the name is enough to tell them apart.
+        let p = Path::new("C:/roms/discs/Wii Sports Resort.rvz");
+        assert_eq!(detect_platform(p, root, None), "wii");
+    }
+}
+
+

@@ -1,0 +1,72 @@
+# Build and publish a release that the in-app updater can find.
+#
+# Triggered by pushing a version tag:
+#
+#   npm version 0.2.0 --no-git-tag-version   # keeps package.json in step
+#   # bump `version` in src-tauri/tauri.conf.json to match
+#   git commit -am "Playdex 0.2.0"
+#   git tag v0.2.0 && git push && git push --tags
+#
+# The tag is what starts this; nothing publishes on an ordinary push. The
+# action builds the installer, signs it with the private key held in repo
+# secrets, and uploads the installer alongside a `latest.json` manifest — the
+# file `plugins.updater.endpoints` in tauri.conf.json points at.
+#
+# Two secrets are required, set under Settings -> Secrets and variables ->
+# Actions:
+#
+#   TAURI_SIGNING_PRIVATE_KEY           contents of ~/.playdex/updater.key
+#   TAURI_SIGNING_PRIVATE_KEY_PASSWORD  empty, unless you set one
+#
+# The private key never leaves your machine and this file: it is not in the
+# repository, and anyone holding it can sign an update Playdex will trust.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # Rust builds are slow from cold; this keeps a tag push to a few minutes.
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: ./src-tauri -> target
+
+      - run: npm ci
+
+      - name: Build, sign and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Playdex ${{ github.ref_name }}
+          # The message of the commit the tag points at becomes the release
+          # notes, and the updater shows them in the notice inside the app —
+          # so make that commit message the one you want users to read.
+          releaseBody: ${{ github.event.head_commit.message }}
+          releaseDraft: false
+          prerelease: false
+          # Produces latest.json next to the installer, which is what the
+          # endpoint in tauri.conf.json fetches.
+          includeUpdaterJson: true
