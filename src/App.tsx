@@ -19,6 +19,7 @@ import GameGrid from "./components/GameGrid";
 import GameDetail from "./components/GameDetail";
 import SettingsModal from "./components/SettingsModal";
 import HomebrewModal from "./components/HomebrewModal";
+import StatsModal from "./components/StatsModal";
 import ProgressToast from "./components/ProgressToast";
 
 export default function App() {
@@ -36,6 +37,7 @@ export default function App() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [homebrewOpen, setHomebrewOpen] = useState(false);
+  const [statsOpen, setStatsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -215,6 +217,7 @@ export default function App() {
         }}
         onOpenSettings={() => setSettingsOpen(true)}
         onOpenHomebrew={() => setHomebrewOpen(true)}
+        onOpenStats={() => setStatsOpen(true)}
       />
 
       <div className="main">
@@ -283,6 +286,16 @@ export default function App() {
             setSettingsOpen(false);
             void refreshSidebar();
             void refreshGames();
+          }}
+        />
+      )}
+
+      {statsOpen && (
+        <StatsModal
+          onClose={() => setStatsOpen(false)}
+          onPick={(id) => {
+            setStatsOpen(false);
+            setSelectedId(id);
           }}
         />
       )}

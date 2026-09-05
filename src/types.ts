@@ -186,3 +186,24 @@ export interface RetroArchCheats {
   /** RetroArch only applies a cheat file on its own when this is true. */
   autoApply: boolean;
 }
+
+export interface SaveEntry {
+  /** "save" for battery progress, "state" for an emulator snapshot. */
+  kind: string;
+  slot: number | null;
+  name: string;
+  path: string;
+  size: number;
+  modified: number;
+  screenshot: string | null;
+}
+
+export interface LibraryInsights {
+  totalGames: number;
+  gamesPlayed: number;
+  totalPlaySeconds: number;
+  sessionCount: number;
+  longestSession: number;
+  recent: Game[];
+  mostPlayed: Game[];
+}

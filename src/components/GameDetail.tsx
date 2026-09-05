@@ -4,6 +4,7 @@ import * as api from "../api";
 import { artUrl, formatDate, formatPlaytime, formatSize } from "../api";
 import type {
   Cheat,
+  SaveEntry,
   Game,
   HackPreview,
   PatchEntry,
@@ -52,6 +53,10 @@ export default function GameDetail({
   const [cheatError, setCheatError] = useState<string | null>(null);
   const [raCheats, setRaCheats] = useState<RetroArchCheats | null>(null);
   const [cheatQuery, setCheatQuery] = useState("");
+  const [saves, setSaves] = useState<SaveEntry[]>([]);
+  const [saveBusy, setSaveBusy] = useState(false);
+  const [saveNote, setSaveNote] = useState<string | null>(null);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   // Some games carry several hundred cheats — Super Mario Bros has 711 — so
   // the ones in use are pinned above and the rest are searched, not scrolled.
@@ -114,6 +119,35 @@ export default function GameDetail({
       setCheatError(api.errorMessage(e));
     } finally {
       setCheatBusy(false);
+    }
+  };
+
+  const refreshSaves = () =>
+    api.listSaves(game.id).then(setSaves).catch(() => setSaves([]));
+
+  const backUpSaves = async () => {
+    setSaveBusy(true);
+    setSaveError(null);
+    try {
+      setSaveNote(await api.backUpSaves(game.id));
+    } catch (e) {
+      setSaveError(api.errorMessage(e));
+    } finally {
+      setSaveBusy(false);
+    }
+  };
+
+  const removeState = async (entry: SaveEntry) => {
+    setSaveBusy(true);
+    setSaveError(null);
+    try {
+      await api.deleteSaveState(entry.path);
+      setSaveNote(`Deleted ${entry.name}`);
+      await refreshSaves();
+    } catch (e) {
+      setSaveError(api.errorMessage(e));
+    } finally {
+      setSaveBusy(false);
     }
   };
 
@@ -196,6 +230,9 @@ export default function GameDetail({
     setCheatQuery("");
     api.listCheats(game.id).then(setCheats).catch(() => setCheats([]));
     api.retroarchCheatStatus().then(setRaCheats).catch(() => setRaCheats(null));
+    setSaveNote(null);
+    setSaveError(null);
+    api.listSaves(game.id).then(setSaves).catch(() => setSaves([]));
   }, [game.id, game.platform]);
 
   const hero = artUrl(game.screenshotPath) ?? artUrl(game.coverPath);
@@ -557,6 +594,89 @@ export default function GameDetail({
           </div>
         )}
         {cheatError && <div className="error-banner">{cheatError}</div>}
+
+        <div className="section-title">Saves</div>
+
+        {saves.length === 0 ? (
+          <div className="hint">
+            No saves or save states found yet. They appear here once the game
+            has written one.
+          </div>
+        ) : (
+          <>
+            <div className="cheat-summary">
+              <span>
+                {saves.filter((s) => s.kind === "save").length} save
+                {saves.filter((s) => s.kind === "save").length === 1 ? "" : "s"}
+                {", "}
+                {saves.filter((s) => s.kind === "state").length} state
+                {saves.filter((s) => s.kind === "state").length === 1 ? "" : "s"}
+              </span>
+              <span className="spacer" />
+              <button
+                className="btn small"
+                onClick={backUpSaves}
+                disabled={saveBusy}
+              >
+                Back up all
+              </button>
+            </div>
+
+            <div className="save-list">
+              {saves.map((entry) => (
+                <div className="save-row" key={entry.path}>
+                  {entry.screenshot ? (
+                    <img
+                      className="save-shot"
+                      src={artUrl(entry.screenshot) ?? undefined}
+                      alt=""
+                    />
+                  ) : (
+                    <span
+                      className={
+                        "save-kind " + (entry.kind === "save" ? "battery" : "snap")
+                      }
+                    >
+                      {entry.kind === "save" ? "SAV" : "ST"}
+                      {entry.slot !== null ? entry.slot : ""}
+                    </span>
+                  )}
+
+                  <span className="save-meta">
+                    <span className="save-name">{entry.name}</span>
+                    <span className="card-sub">
+                      {formatSize(entry.size)} · {formatDate(entry.modified)}
+                      {entry.kind === "save" ? " · game progress" : " · snapshot"}
+                    </span>
+                  </span>
+
+                  {entry.kind === "state" && (
+                    <button
+                      className="btn small danger"
+                      disabled={saveBusy}
+                      onClick={() => void removeState(entry)}
+                    >
+                      Delete
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+
+            <div className="hint" style={{ marginTop: 6 }}>
+              Back up copies everything into the app data folder, dated. Only
+              save states can be deleted here — battery saves hold your actual
+              progress.
+            </div>
+          </>
+        )}
+
+        {saveNote && (
+          <div className="path-box" style={{ marginTop: 8 }}>
+            {saveNote}
+          </div>
+        )}
+        {saveError && <div className="error-banner">{saveError}</div>}
 
         <div className="section-title">Manage</div>
         <div className="row">

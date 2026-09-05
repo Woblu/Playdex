@@ -12,6 +12,7 @@ mod models;
 mod patch;
 mod platforms;
 mod romcheck;
+mod saves;
 mod scan;
 mod scrape;
 
@@ -134,6 +135,7 @@ pub fn run() {
             commands::list_platforms,
             commands::known_platforms,
             commands::library_stats,
+            commands::library_insights,
             commands::set_favorite,
             commands::set_hidden,
             commands::set_game_platform,
@@ -177,6 +179,9 @@ pub fn run() {
             commands::enable_auto_apply_cheats,
             commands::list_hack_bundles,
             commands::download_hack_bundle,
+            commands::list_saves,
+            commands::back_up_saves,
+            commands::delete_save_state,
             commands::detect_retroarch,
             commands::test_credentials,
         ])

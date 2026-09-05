@@ -1053,3 +1053,108 @@ pub async fn download_hack_bundle(app: AppHandle, bundle: HackBundle) -> Result<
         bundle.name
     ))
 }
+
+// --------------------------------------------------------------- saves
+
+fn retroarch_exe(conn: &rusqlite::Connection) -> Result<std::path::PathBuf> {
+    let path = db::get_setting(conn, "retroarch_path")?
+        .map(|p| crate::detect::clean_path(&p))
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| AppError::Other("Set the RetroArch path in Settings first".into()))?;
+    Ok(std::path::PathBuf::from(path))
+}
+
+/// The save files and save states belonging to one game.
+#[tauri::command]
+pub fn list_saves(db: State<Db>, game_id: i64) -> Result<Vec<SaveEntry>> {
+    let conn = db.0.lock().unwrap();
+    let game = db::get_game(&conn, game_id)?
+        .ok_or_else(|| AppError::Other("Game not found".into()))?;
+    let exe = retroarch_exe(&conn)?;
+    let core = launch::resolve_config(&conn, &game.platform)
+        .core
+        .unwrap_or_default();
+    let folder = crate::cheats::core_folder_name(&core);
+
+    Ok(crate::saves::find(
+        &exe,
+        std::path::Path::new(&game.path),
+        &rom_name_of(&game),
+        &folder,
+    ))
+}
+
+/// Copy this game's saves somewhere safe before you overwrite them.
+#[tauri::command]
+pub fn back_up_saves(state: State<AppState>, db: State<Db>, game_id: i64) -> Result<String> {
+    let entries = {
+        let conn = db.0.lock().unwrap();
+        let game = db::get_game(&conn, game_id)?
+            .ok_or_else(|| AppError::Other("Game not found".into()))?;
+        let exe = retroarch_exe(&conn)?;
+        let core = launch::resolve_config(&conn, &game.platform)
+            .core
+            .unwrap_or_default();
+        let folder = crate::cheats::core_folder_name(&core);
+        let found = crate::saves::find(
+            &exe,
+            std::path::Path::new(&game.path),
+            &rom_name_of(&game),
+            &folder,
+        );
+        if found.is_empty() {
+            return Err(AppError::Other("Nothing to back up yet".into()));
+        }
+        (found, game.title)
+    };
+
+    let dest = crate::saves::back_up(&entries.0, &state.media_root, &entries.1)?;
+    Ok(format!(
+        "Copied {} file{} to {}",
+        entries.0.len(),
+        if entries.0.len() == 1 { "" } else { "s" },
+        dest.to_string_lossy()
+    ))
+}
+
+/// Delete one save state. Battery saves are refused — losing real progress
+/// to a stray click is not worth the convenience.
+#[tauri::command]
+pub fn delete_save_state(path: String) -> Result<()> {
+    let p = std::path::Path::new(&path);
+    let name = p
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if !name.contains(".state") {
+        return Err(AppError::Other(
+            "Only save states can be deleted here — battery saves hold your actual progress"
+                .into(),
+        ));
+    }
+    std::fs::remove_file(p)?;
+    Ok(())
+}
+
+// ------------------------------------------------------------ insights
+
+/// Everything the stats view shows, in one round trip.
+#[tauri::command]
+pub fn library_insights(db: State<Db>) -> Result<LibraryInsights> {
+    let conn = db.0.lock().unwrap();
+    let stats = db::stats(&conn)?;
+    Ok(LibraryInsights {
+        total_games: stats.total_games,
+        games_played: conn.query_row(
+            "SELECT COUNT(*) FROM games WHERE play_seconds > 0",
+            [],
+            |r| r.get(0),
+        )?,
+        total_play_seconds: stats.total_play_seconds,
+        session_count: db::session_count(&conn)?,
+        longest_session: db::longest_session(&conn)?,
+        recent: db::recently_played(&conn, 6)?,
+        most_played: db::most_played(&conn, 6)?,
+    })
+}

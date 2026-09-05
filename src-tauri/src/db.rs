@@ -715,3 +715,40 @@ pub fn set_cheat_enabled(conn: &Connection, game_id: i64, idx: i64, on: bool) ->
     )?;
     Ok(())
 }
+
+// ------------------------------------------------------------ insights
+
+/// Games with a play history, most recent first.
+pub fn recently_played(conn: &Connection, limit: i64) -> Result<Vec<Game>> {
+    let sql = format!(
+        "SELECT {GAME_COLS} FROM games
+         WHERE last_played IS NOT NULL AND hidden = 0
+         ORDER BY last_played DESC LIMIT ?1"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![limit], row_to_game)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Games ranked by time spent in them.
+pub fn most_played(conn: &Connection, limit: i64) -> Result<Vec<Game>> {
+    let sql = format!(
+        "SELECT {GAME_COLS} FROM games
+         WHERE play_seconds > 0 AND hidden = 0
+         ORDER BY play_seconds DESC LIMIT ?1"
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let rows = stmt.query_map(params![limit], row_to_game)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+pub fn session_count(conn: &Connection) -> Result<i64> {
+    Ok(conn.query_row("SELECT COUNT(*) FROM play_sessions", [], |r| r.get(0))?)
+}
+
+pub fn longest_session(conn: &Connection) -> Result<i64> {
+    Ok(conn
+        .query_row("SELECT COALESCE(MAX(seconds), 0) FROM play_sessions", [], |r| {
+            r.get(0)
+        })?)
+}

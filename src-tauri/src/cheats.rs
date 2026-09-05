@@ -508,6 +508,23 @@ fn config_path_for(exe: &Path) -> Option<PathBuf> {
     candidates.into_iter().find(|p| p.is_file())
 }
 
+/// Read one setting out of RetroArch's config, expanding the ":" prefix it
+/// uses to mean "relative to my own folder". Shared with save handling.
+pub fn config_dir(exe: &Path, key: &str) -> Option<PathBuf> {
+    let config_path = config_path_for(exe)?;
+    let text = std::fs::read_to_string(&config_path).ok()?;
+    let raw = config_value(&text, key)?;
+    if raw.is_empty() || raw == "default" {
+        return None;
+    }
+    let base = exe.parent()?;
+    Some(if raw.starts_with(':') {
+        base.join(raw.trim_start_matches(':').trim_start_matches(['\\', '/']))
+    } else {
+        PathBuf::from(raw)
+    })
+}
+
 fn config_value(text: &str, key: &str) -> Option<String> {
     for line in text.lines() {
         let line = line.trim();

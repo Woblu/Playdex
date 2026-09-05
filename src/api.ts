@@ -5,6 +5,7 @@ import type {
   HackPreview,
   GameFilter,
   LibraryFolder,
+  LibraryInsights,
   LibraryStats,
   Cheat,
   DetectedEmulator,
@@ -15,6 +16,7 @@ import type {
   PatchEntry,
   PlatformInfo,
   RetroArchCheats,
+  SaveEntry,
   ProviderStatus,
   Settings,
 } from "./types";
@@ -31,6 +33,9 @@ export const listPlatforms = () => invoke<PlatformInfo[]>("list_platforms");
 export const knownPlatforms = () => invoke<PlatformInfo[]>("known_platforms");
 
 export const libraryStats = () => invoke<LibraryStats>("library_stats");
+
+export const libraryInsights = () =>
+  invoke<LibraryInsights>("library_insights");
 
 export const setFavorite = (id: number, value: boolean) =>
   invoke<void>("set_favorite", { id, value });
@@ -161,6 +166,17 @@ export const listHackBundles = () =>
 
 export const downloadHackBundle = (bundle: HackBundle) =>
   invoke<string>("download_hack_bundle", { bundle });
+
+// --------------------------------------------------------------- saves
+
+export const listSaves = (gameId: number) =>
+  invoke<SaveEntry[]>("list_saves", { gameId });
+
+export const backUpSaves = (gameId: number) =>
+  invoke<string>("back_up_saves", { gameId });
+
+export const deleteSaveState = (path: string) =>
+  invoke<void>("delete_save_state", { path });
 
 // --------------------------------------------------------- diagnostics
 

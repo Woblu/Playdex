@@ -212,3 +212,30 @@ pub struct HackBundle {
     pub size: i64,
     pub url: String,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SaveEntry {
+    /// "save" for battery progress, "state" for an emulator snapshot.
+    pub kind: String,
+    /// Slot number for a numbered save state.
+    pub slot: Option<i64>,
+    pub name: String,
+    pub path: String,
+    pub size: i64,
+    pub modified: i64,
+    /// RetroArch writes a thumbnail beside a state when configured to.
+    pub screenshot: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LibraryInsights {
+    pub total_games: i64,
+    pub games_played: i64,
+    pub total_play_seconds: i64,
+    pub session_count: i64,
+    pub longest_session: i64,
+    pub recent: Vec<Game>,
+    pub most_played: Vec<Game>,
+}
