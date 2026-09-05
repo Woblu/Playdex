@@ -30,6 +30,18 @@ file gets CRC32, MD5 and SHA1 computed in a single pass. For a `.zip`, the ROM
 *inside* the archive is hashed rather than the archive itself, because that is
 what the metadata databases and the No-Intro/Redump DATs index.
 
+**Rejecting what isn't a game.** ROM folders collect manuals, box scans, BIOS
+dumps and the odd installer, and extensions lie — a `.bin` is as likely to be
+firmware or a CD audio track as a game. Every candidate is inspected before it
+is hashed: magic numbers for images, PDFs, Office documents, executables and
+media; BIOS filename patterns; and a 1 KB size floor. Headers are positively
+confirmed for NES, Game Boy, GBA, N64 and Mega Drive.
+
+The bias is toward keeping files. Only definite evidence rejects one; a header
+mismatch is reported as *suspect* and indexed anyway, because losing a real
+game is worse than listing a stray file. The scan summary says what was thrown
+out and why, so a missing game is traceable.
+
 **Platform detection.** Extensions are not always enough — `.bin`, `.cue`,
 `.iso`, `.chd` and `.zip` are shared across a dozen systems. Playdex resolves
 them in this order:
@@ -104,6 +116,16 @@ of 188 items are CC-licensed). Each result shows its licence where it declares
 one. Even inside the allowlist, homebrew scenes produce fan remakes that borrow
 commercial names, so treat the licence column as the signal. **Adding a
 collection to that allowlist is a licensing decision, not a convenience one.**
+
+**Saves.** A game's save files and save states are listed together, with
+RetroArch's state thumbnails where it wrote them, found across the configured
+save directories, the per-core subfolders RetroArch makes when sorting is on,
+and the ROM's own folder. Back up copies everything into a dated folder. Only
+save states can be deleted — battery saves hold real progress and are refused.
+
+**Stats.** Playtime is recorded per session, and the library view surfaces
+total time, session count, longest session, and jump-back-in and most-played
+lists that open the game.
 
 **Launching.** RetroArch is invoked as `retroarch -L <core> <rom>`. Each system
 has a preferred libretro core, overridable per system, or you can point a system
@@ -184,6 +206,9 @@ src-tauri/src/
   hacks.rs        patch catalog import (folders and 7z bundles)
   homebrew.rs     Internet Archive homebrew search and install
   detect.rs       finding an installed RetroArch
+  romcheck.rs     telling ROMs from manuals, BIOS dumps and box art
+  cheats.rs       Game Genie codes and RetroArch's cheat format
+  saves.rs        save files and save states
   media.rs        artwork download and cache
   launch.rs       command construction, process spawn, playtime
 src/
@@ -211,6 +236,8 @@ you.
   public browse endpoint.
 - **DAT matching** — verify dumps against No-Intro/Redump DATs and flag bad
   dumps, renames and duplicates.
+- **Controller navigation** — the library is mouse-driven; a gamepad-friendly
+  mode would suit couch play.
 - **M3U grouping** — collapse multi-disc games into one entry.
 - **Save state and screenshot browsing** per game.
 - **Controller-friendly big-picture mode.**
