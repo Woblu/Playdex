@@ -1,0 +1,1055 @@
+//! Tauri commands — the whole surface the UI can call.
+
+use std::collections::HashMap;
+use std::sync::atomic::Ordering;
+use tauri::{AppHandle, Emitter, Manager, State};
+use tauri_plugin_dialog::DialogExt;
+
+use crate::db::{self, Db};
+use crate::error::{AppError, Result};
+use crate::launch;
+use crate::media;
+use crate::models::*;
+use crate::platforms;
+use crate::scan;
+use crate::scrape;
+use crate::AppState;
+
+// ------------------------------------------------------------- library
+
+#[tauri::command]
+pub fn list_games(db: State<Db>, filter: GameFilter) -> Result<Vec<Game>> {
+    let conn = db.0.lock().unwrap();
+    db::list_games(&conn, &filter)
+}
+
+#[tauri::command]
+pub fn get_game(db: State<Db>, id: i64) -> Result<Option<Game>> {
+    let conn = db.0.lock().unwrap();
+    db::get_game(&conn, id)
+}
+
+#[tauri::command]
+pub fn list_platforms(db: State<Db>) -> Result<Vec<PlatformInfo>> {
+    let conn = db.0.lock().unwrap();
+    db::platform_counts(&conn)
+}
+
+/// Every platform we know about, for dropdowns — not just ones with games.
+#[tauri::command]
+pub fn known_platforms() -> Vec<PlatformInfo> {
+    platforms::PLATFORMS
+        .iter()
+        .map(|p| PlatformInfo {
+            slug: p.slug.to_string(),
+            name: p.name.to_string(),
+            extensions: p.exts.iter().map(|s| s.to_string()).collect(),
+            cores: p.cores.iter().map(|s| s.to_string()).collect(),
+            game_count: 0,
+        })
+        .collect()
+}
+
+#[tauri::command]
+pub fn library_stats(db: State<Db>) -> Result<LibraryStats> {
+    let conn = db.0.lock().unwrap();
+    db::stats(&conn)
+}
+
+#[tauri::command]
+pub fn set_favorite(db: State<Db>, id: i64, value: bool) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::set_favorite(&conn, id, value)
+}
+
+#[tauri::command]
+pub fn set_hidden(db: State<Db>, id: i64, value: bool) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::set_hidden(&conn, id, value)
+}
+
+#[tauri::command]
+pub fn set_game_platform(db: State<Db>, id: i64, platform: String) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::set_platform(&conn, id, &platform)
+}
+
+/// Remove from the library only. The ROM file is left alone.
+#[tauri::command]
+pub fn remove_game(state: State<AppState>, db: State<Db>, id: i64) -> Result<()> {
+    media::clear_game_media(&state.media_root, id);
+    let conn = db.0.lock().unwrap();
+    db::remove_game(&conn, id)
+}
+
+// ------------------------------------------------------------- folders
+
+#[tauri::command]
+pub fn list_library_folders(db: State<Db>) -> Result<Vec<LibraryFolder>> {
+    let conn = db.0.lock().unwrap();
+    db::list_folders(&conn)
+}
+
+#[tauri::command]
+pub fn add_library_folder(db: State<Db>, path: String, platform: Option<String>) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::add_folder(&conn, &path, platform.as_deref().filter(|p| !p.is_empty()))
+}
+
+#[tauri::command]
+pub fn remove_library_folder(db: State<Db>, id: i64) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::remove_folder(&conn, id)
+}
+
+#[tauri::command]
+pub async fn pick_folder(app: AppHandle) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_folder(move |picked| {
+        let _ = tx.send(picked);
+    });
+    rx.await
+        .ok()
+        .flatten()
+        .and_then(|p| p.into_path().ok())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+#[tauri::command]
+pub async fn pick_file(app: AppHandle) -> Option<String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog().file().pick_file(move |picked| {
+        let _ = tx.send(picked);
+    });
+    rx.await
+        .ok()
+        .flatten()
+        .and_then(|p| p.into_path().ok())
+        .map(|p| p.to_string_lossy().to_string())
+}
+
+// ---------------------------------------------------------------- scan
+
+#[tauri::command]
+pub async fn scan_library(app: AppHandle) -> Result<ScanProgress> {
+    let handle = app.clone();
+    let tally = tauri::async_runtime::spawn_blocking(move || -> Result<scan::ScanTally> {
+        let db_handle = handle.state::<Db>().0.clone();
+        scan::scan_all(&handle, &db_handle)
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))??;
+
+    Ok(ScanProgress {
+        phase: "done".into(),
+        current: 0,
+        total: 0,
+        message: format!(
+            "Added {}, skipped {}, ignored {}",
+            tally.added, tally.skipped, tally.ignored
+        ),
+        added: tally.added,
+        skipped: tally.skipped,
+        ignored: tally.ignored,
+        ignored_summary: tally.summary(),
+        done: true,
+    })
+}
+
+#[tauri::command]
+pub fn clean_missing(db: State<Db>) -> Result<usize> {
+    let conn = db.0.lock().unwrap();
+    scan::remove_missing(&conn)
+}
+
+// -------------------------------------------------------------- scrape
+
+#[tauri::command]
+pub fn cancel_scrape(state: State<AppState>) {
+    state.scrape_cancel.store(true, Ordering::SeqCst);
+}
+
+/// Fetch metadata for everything that still needs it.
+#[tauri::command]
+pub async fn scrape_library(app: AppHandle, platform: Option<String>) -> Result<String> {
+    let state = app.state::<AppState>();
+    if state
+        .scrape_running
+        .swap(true, Ordering::SeqCst)
+    {
+        return Err(AppError::Other("A scrape is already running".into()));
+    }
+    state.scrape_cancel.store(false, Ordering::SeqCst);
+
+    let client = state.client.clone();
+    let media_root = state.media_root.clone();
+
+    let outcome = run_scrape(&app, &client, &media_root, platform).await;
+
+    let state = app.state::<AppState>();
+    state.scrape_running.store(false, Ordering::SeqCst);
+    outcome
+}
+
+async fn run_scrape(
+    app: &AppHandle,
+    client: &reqwest::Client,
+    media_root: &std::path::Path,
+    platform: Option<String>,
+) -> Result<String> {
+    let db = app.state::<Db>();
+
+    let (games, creds) = {
+        let conn = db.0.lock().unwrap();
+        let games = db::games_needing_scrape(&conn, platform.as_deref())?;
+        let settings = db::all_settings(&conn)?;
+        (games, scrape::Credentials::from_settings(&settings))
+    };
+
+    if !creds.has_any() {
+        return Err(AppError::Other(
+            "Every metadata source is switched off. Turn libretro artwork back on, or add ScreenScraper or TheGamesDB credentials, in Settings."
+                .into(),
+        ));
+    }
+
+    let total = games.len();
+    let mut ok = 0usize;
+    let mut missed = 0usize;
+    let mut halted: Option<String> = None;
+
+    for (i, game) in games.iter().enumerate() {
+        let cancel = app.state::<AppState>().scrape_cancel.load(Ordering::SeqCst);
+        if cancel {
+            halted = Some("Cancelled".into());
+            break;
+        }
+
+        let res = scrape::scrape_game(client, &db.0, &creds, media_root, game).await?;
+        if res.status == "ok" {
+            ok += 1;
+        } else {
+            missed += 1;
+        }
+
+        let _ = app.emit(
+            "scrape-progress",
+            ScrapeProgress {
+                current: i + 1,
+                total,
+                game_id: game.id,
+                title: game.title.clone(),
+                status: res.status.clone(),
+                source: res.source.clone(),
+                done: false,
+                halted_reason: res.halt.clone(),
+            },
+        );
+
+        if let Some(reason) = res.halt {
+            halted = Some(reason);
+            break;
+        }
+
+        // ScreenScraper rejects bursts; a small gap keeps a big library within
+        // the per-minute allowance.
+        tokio::time::sleep(std::time::Duration::from_millis(350)).await;
+    }
+
+    let summary = match &halted {
+        Some(reason) => format!("Stopped after {ok} matched, {missed} unmatched — {reason}"),
+        None => format!("{ok} matched, {missed} unmatched"),
+    };
+
+    let _ = app.emit(
+        "scrape-progress",
+        ScrapeProgress {
+            current: total,
+            total,
+            game_id: 0,
+            title: String::new(),
+            status: "done".into(),
+            source: None,
+            done: true,
+            halted_reason: halted,
+        },
+    );
+
+    Ok(summary)
+}
+
+/// Re-fetch metadata for one game, ignoring its current status.
+#[tauri::command]
+pub async fn scrape_one(app: AppHandle, id: i64) -> Result<String> {
+    let state = app.state::<AppState>();
+    let client = state.client.clone();
+    let media_root = state.media_root.clone();
+    let db = app.state::<Db>();
+
+    let (game, creds) = {
+        let conn = db.0.lock().unwrap();
+        let game = db::get_game(&conn, id)?
+            .ok_or_else(|| AppError::Other("Game not found".into()))?;
+        let settings = db::all_settings(&conn)?;
+        (game, scrape::Credentials::from_settings(&settings))
+    };
+
+    if !creds.has_any() {
+        return Err(AppError::Other(
+            "Every metadata source is switched off. Turn libretro artwork back on in Settings."
+                .into(),
+        ));
+    }
+
+    let res = scrape::scrape_game(&client, &db.0, &creds, &media_root, &game).await?;
+    Ok(match res.source {
+        Some(src) => format!("Matched via {src}"),
+        None => res
+            .halt
+            .unwrap_or_else(|| "No match found".to_string()),
+    })
+}
+
+// -------------------------------------------------------------- launch
+
+#[tauri::command]
+pub fn launch_game(app: AppHandle, db: State<Db>, id: i64) -> Result<()> {
+    let game = {
+        let conn = db.0.lock().unwrap();
+        db::get_game(&conn, id)?.ok_or_else(|| AppError::Other("Game not found".into()))?
+    };
+    launch::launch(&app, &db.0, &game)
+}
+
+/// Show what would run, so a misconfigured emulator is obvious before launch.
+#[tauri::command]
+pub fn preview_launch(db: State<Db>, id: i64) -> Result<String> {
+    let conn = db.0.lock().unwrap();
+    let game = db::get_game(&conn, id)?.ok_or_else(|| AppError::Other("Game not found".into()))?;
+    let (exe, args) = launch::build_command(&conn, &game)?;
+    let quoted: Vec<String> = args
+        .iter()
+        .map(|a| {
+            if a.contains(' ') {
+                format!("\"{a}\"")
+            } else {
+                a.clone()
+            }
+        })
+        .collect();
+    Ok(format!("\"{exe}\" {}", quoted.join(" ")))
+}
+
+#[tauri::command]
+pub fn reveal_game(db: State<Db>, id: i64) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    let game = db::get_game(&conn, id)?.ok_or_else(|| AppError::Other("Game not found".into()))?;
+    let path = std::path::PathBuf::from(&game.path);
+    let dir = path.parent().unwrap_or(&path);
+    open_in_file_manager(dir)
+}
+
+fn open_in_file_manager(dir: &std::path::Path) -> Result<()> {
+    #[cfg(target_os = "windows")]
+    let program = "explorer";
+    #[cfg(target_os = "macos")]
+    let program = "open";
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let program = "xdg-open";
+
+    std::process::Command::new(program)
+        .arg(dir)
+        .spawn()
+        .map_err(|e| AppError::Other(e.to_string()))?;
+    Ok(())
+}
+
+// ------------------------------------------------------------ settings
+
+#[tauri::command]
+pub fn get_settings(db: State<Db>) -> Result<HashMap<String, String>> {
+    let conn = db.0.lock().unwrap();
+    db::all_settings(&conn)
+}
+
+#[tauri::command]
+pub fn save_settings(db: State<Db>, values: HashMap<String, String>) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    for (k, v) in values {
+        // Paths arrive with the quotes Explorer's "Copy as path" wraps them in.
+        let value = if k.ends_with("_path") || k.ends_with("_dir") {
+            crate::detect::clean_path(&v)
+        } else {
+            v
+        };
+        db::set_setting(&conn, &k, &value)?;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_emulators(db: State<Db>) -> Result<Vec<EmulatorConfig>> {
+    let conn = db.0.lock().unwrap();
+    db::list_emulators(&conn)
+}
+
+#[tauri::command]
+pub fn save_emulator(db: State<Db>, config: EmulatorConfig) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::set_emulator(&conn, &config)
+}
+
+/// The emulator that would actually be used for a platform right now.
+#[tauri::command]
+pub fn effective_emulator(db: State<Db>, platform: String) -> Result<EmulatorConfig> {
+    let conn = db.0.lock().unwrap();
+    Ok(launch::resolve_config(&conn, &platform))
+}
+
+// --------------------------------------------------------------- hacks
+
+fn sanitize_filename(name: &str) -> String {
+    let cleaned: String = name
+        .chars()
+        .map(|c| if r#"\/:*?"<>|"#.contains(c) { '_' } else { c })
+        .collect();
+    let trimmed = cleaned.trim().trim_matches('.').to_string();
+    if trimmed.is_empty() {
+        "hack".into()
+    } else {
+        trimmed
+    }
+}
+
+/// Read a patch and report whether it matches the chosen base ROM, without
+/// writing anything.
+#[tauri::command]
+pub fn inspect_patch(
+    db: State<Db>,
+    base_game_id: i64,
+    patch_path: String,
+) -> Result<HackPreview> {
+    let bytes = std::fs::read(&patch_path)?;
+    let info = crate::patch::inspect(&bytes)?;
+
+    let base = {
+        let conn = db.0.lock().unwrap();
+        db::get_game(&conn, base_game_id)?
+            .ok_or_else(|| AppError::Other("Base game not found".into()))?
+    };
+
+    let suggested_title = std::path::Path::new(&patch_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("ROM hack")
+        .to_string();
+
+    let expected = info.source_crc.map(|c| format!("{c:08X}"));
+    let base_crc = base.crc32.clone().map(|c| c.to_uppercase());
+
+    let (compatible, message) = match (&expected, &base_crc) {
+        (Some(want), Some(have)) if want.eq_ignore_ascii_case(have) => (
+            true,
+            format!("Matches your copy of {} exactly.", base.title),
+        ),
+        (Some(want), Some(have)) => (
+            false,
+            format!(
+                "This patch was built for a ROM with CRC32 {want}, but your {} is {have}. \
+                 You most likely need a different revision or region.",
+                base.title
+            ),
+        ),
+        (Some(_), None) => (
+            true,
+            "Your ROM has not been hashed, so the match cannot be verified up front.".into(),
+        ),
+        (None, _) => (
+            true,
+            format!(
+                "{} patches carry no checksum, so this cannot be verified until it is applied.",
+                info.format.as_str()
+            ),
+        ),
+    };
+
+    Ok(HackPreview {
+        format: info.format.as_str().to_string(),
+        suggested_title,
+        expected_crc: expected,
+        base_crc,
+        compatible,
+        message,
+    })
+}
+
+/// Apply a patch and add the result to the library as its own game.
+/// The base ROM is read but never modified.
+fn apply_patch_file(
+    state: &AppState,
+    db: &Db,
+    base_game_id: i64,
+    patch_path: &str,
+    title: Option<String>,
+) -> Result<i64> {
+    let base = {
+        let conn = db.0.lock().unwrap();
+        db::get_game(&conn, base_game_id)?
+            .ok_or_else(|| AppError::Other("Base game not found".into()))?
+    };
+
+    let (rom_bytes, rom_name) = crate::hashing::read_rom_bytes(std::path::Path::new(&base.path))?;
+    let patch_bytes = std::fs::read(patch_path)?;
+    let info = crate::patch::inspect(&patch_bytes)?;
+    let patched = crate::patch::apply(&rom_bytes, &patch_bytes)?;
+
+    let title = title
+        .map(|t| t.trim().to_string())
+        .filter(|t| !t.is_empty())
+        .unwrap_or_else(|| {
+            std::path::Path::new(patch_path)
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .unwrap_or("ROM hack")
+                .to_string()
+        });
+
+    let ext = std::path::Path::new(&rom_name)
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("rom")
+        .to_string();
+
+    let dir = state.media_root.join("hacks").join(base_game_id.to_string());
+    std::fs::create_dir_all(&dir)?;
+    let filename = format!("{}.{ext}", sanitize_filename(&title));
+    let dest = dir.join(&filename);
+    std::fs::write(&dest, &patched)?;
+
+    let conn = db.0.lock().unwrap();
+    db::insert_hack(
+        &conn,
+        &dest.to_string_lossy(),
+        &filename,
+        &base.platform,
+        &title,
+        patched.len() as i64,
+        Some(&format!("{:08x}", crate::patch::crc32(&patched))),
+        base_game_id,
+        patch_path,
+        info.format.as_str(),
+    )
+}
+
+/// Apply a patch chosen from the file system.
+#[tauri::command]
+pub fn add_hack(
+    state: State<AppState>,
+    db: State<Db>,
+    base_game_id: i64,
+    patch_path: String,
+    title: Option<String>,
+) -> Result<i64> {
+    apply_patch_file(&state, &db, base_game_id, &patch_path, title)
+}
+
+/// Apply a patch already in the catalog.
+#[tauri::command]
+pub fn apply_catalog_patch(
+    state: State<AppState>,
+    db: State<Db>,
+    base_game_id: i64,
+    patch_id: i64,
+    title: Option<String>,
+) -> Result<i64> {
+    let entry = {
+        let conn = db.0.lock().unwrap();
+        db::get_patch(&conn, patch_id)?
+            .ok_or_else(|| AppError::Other("Patch not found in the catalog".into()))?
+    };
+    let title = title.or(Some(entry.name.clone()));
+    apply_patch_file(&state, &db, base_game_id, &entry.path, title)
+}
+
+// ------------------------------------------------------- patch catalog
+
+/// Index a folder of patches, or extract and index the patches inside a .7z
+/// bundle. Nothing else in the archive is written to disk.
+#[tauri::command]
+pub async fn import_patches(app: AppHandle, path: String) -> Result<String> {
+    let handle = app.clone();
+    let (imported, skipped) =
+        tauri::async_runtime::spawn_blocking(move || -> Result<(usize, usize)> {
+            let db_handle = handle.state::<Db>().0.clone();
+            let root = handle.state::<AppState>().media_root.join("patches");
+            std::fs::create_dir_all(&root)?;
+            let emitter = handle.clone();
+            let mut on_progress = move |p: ImportProgress| {
+                let _ = emitter.emit("import-progress", p);
+            };
+            crate::hacks::import(
+                &mut on_progress,
+                &db_handle,
+                &root,
+                std::path::Path::new(&path),
+            )
+        })
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))??;
+
+    Ok(format!("Catalogued {imported} patches, skipped {skipped}"))
+}
+
+/// Catalogued patches built for exactly this ROM, matched on CRC32.
+#[tauri::command]
+pub fn patches_for_game(db: State<Db>, game_id: i64) -> Result<Vec<PatchEntry>> {
+    let conn = db.0.lock().unwrap();
+    let game = db::get_game(&conn, game_id)?
+        .ok_or_else(|| AppError::Other("Game not found".into()))?;
+    match game.crc32 {
+        Some(crc) => db::patches_for_crc(&conn, &crc),
+        None => Ok(Vec::new()),
+    }
+}
+
+#[tauri::command]
+pub fn list_patches(db: State<Db>, search: Option<String>) -> Result<Vec<PatchEntry>> {
+    let conn = db.0.lock().unwrap();
+    db::list_patches(&conn, search.as_deref(), 500)
+}
+
+#[tauri::command]
+pub fn patch_catalog_size(db: State<Db>) -> Result<i64> {
+    let conn = db.0.lock().unwrap();
+    db::patch_catalog_size(&conn)
+}
+
+#[tauri::command]
+pub fn clear_patch_catalog(db: State<Db>) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::clear_patch_catalog(&conn)
+}
+
+// ------------------------------------------------------------ homebrew
+
+/// Search the Internet Archive's homebrew collections.
+#[tauri::command]
+pub async fn search_homebrew(
+    app: AppHandle,
+    query: String,
+    page: i64,
+) -> Result<Vec<HomebrewItem>> {
+    let client = app.state::<AppState>().client.clone();
+    crate::homebrew::search(&client, &query, page).await
+}
+
+#[tauri::command]
+pub fn homebrew_collections() -> Vec<String> {
+    crate::homebrew::collection_names()
+}
+
+/// The downloadable ROMs inside one archive item.
+#[tauri::command]
+pub async fn homebrew_files(app: AppHandle, identifier: String) -> Result<HomebrewDetail> {
+    let client = app.state::<AppState>().client.clone();
+    let (files, image_url) = crate::homebrew::item_files(&client, &identifier).await?;
+    Ok(HomebrewDetail { files, image_url })
+}
+
+/// Download one homebrew ROM and add it to the library, artwork and all.
+#[tauri::command]
+pub async fn install_homebrew(
+    app: AppHandle,
+    item: HomebrewItem,
+    file: HomebrewFile,
+    image_url: Option<String>,
+) -> Result<i64> {
+    let (client, media_root) = {
+        let state = app.state::<AppState>();
+        (state.client.clone(), state.media_root.clone())
+    };
+
+    let dest_dir = media_root.join("homebrew").join(&item.identifier);
+    let path =
+        crate::homebrew::download_file(&client, &file.url, &file.name, &dest_dir).await?;
+
+    // Hash it exactly like a scanned ROM so it behaves like one.
+    let hashes = crate::hashing::hash_rom(&path).ok().flatten();
+    let size = hashes
+        .as_ref()
+        .map(|h| h.size as i64)
+        .or_else(|| std::fs::metadata(&path).ok().map(|m| m.len() as i64))
+        .unwrap_or(0);
+
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+    let platform = item
+        .platform
+        .clone()
+        .or_else(|| {
+            let candidates = platforms::candidates_for_ext(&ext);
+            (candidates.len() == 1).then(|| candidates[0].slug.to_string())
+        })
+        .unwrap_or_else(|| "unknown".to_string());
+
+    let path_str = path.to_string_lossy().to_string();
+    let title = crate::scan::clean_title(&item.title);
+
+    let game_id = {
+        let db = app.state::<Db>();
+        let conn = db.0.lock().unwrap();
+        db::insert_game(
+            &conn,
+            &path_str,
+            &file.name,
+            &platform,
+            &title,
+            None,
+            size,
+            hashes.as_ref().map(|h| h.crc32.as_str()),
+            hashes.as_ref().map(|h| h.md5.as_str()),
+            hashes.as_ref().map(|h| h.sha1.as_str()),
+            hashes.as_ref().and_then(|h| h.inner_name.as_deref()),
+        )?;
+        db::game_id_by_path(&conn, &path_str)?
+            .ok_or_else(|| AppError::Other("Could not record the download".into()))?
+    };
+
+    // The archive page already carries a description and a screenshot, so the
+    // entry arrives complete without troubling a scraper.
+    let cover = match &image_url {
+        Some(url) => media::download_image(&client, url, &media_root, game_id, "cover").await?,
+        None => None,
+    };
+
+    let meta = db::Metadata {
+        title: None,
+        description: item.description.clone(),
+        developer: item.creator.clone(),
+        publisher: None,
+        genre: None,
+        release_date: item.year.clone(),
+        players: None,
+        rating: None,
+        cover_path: cover,
+        screenshot_path: None,
+        logo_path: None,
+        source: "internetarchive".into(),
+    };
+
+    let db = app.state::<Db>();
+    let conn = db.0.lock().unwrap();
+    db::apply_metadata(&conn, game_id, &meta)?;
+
+    Ok(game_id)
+}
+
+// ---------------------------------------------------------- diagnostics
+
+/// Look for an installed RetroArch so the path does not have to be typed.
+#[tauri::command]
+pub fn detect_retroarch() -> Option<crate::detect::DetectedEmulator> {
+    crate::detect::find_retroarch()
+}
+
+/// Ask both metadata providers whether the stored credentials work.
+#[tauri::command]
+pub async fn test_credentials(app: AppHandle) -> Result<Vec<scrape::ProviderStatus>> {
+    let client = app.state::<AppState>().client.clone();
+    let creds = {
+        let db = app.state::<Db>();
+        let conn = db.0.lock().unwrap();
+        scrape::Credentials::from_settings(&db::all_settings(&conn)?)
+    };
+    Ok(scrape::check_credentials(&client, &creds).await)
+}
+
+// -------------------------------------------------------------- cheats
+
+/// The ROM's own name, which is how both the cheat and artwork databases
+/// index it — not the cleaned-up display title.
+fn rom_name_of(game: &Game) -> String {
+    let raw = game.inner_name.as_deref().unwrap_or(&game.filename);
+    std::path::Path::new(raw)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or(raw)
+        .to_string()
+}
+
+/// Look this game up in libretro's cheat database and remember what it finds.
+#[tauri::command]
+pub async fn find_cheats(app: AppHandle, game_id: i64) -> Result<Vec<Cheat>> {
+    let client = app.state::<AppState>().client.clone();
+    let db = app.state::<Db>();
+
+    let game = {
+        let conn = db.0.lock().unwrap();
+        db::get_game(&conn, game_id)?
+            .ok_or_else(|| AppError::Other("Game not found".into()))?
+    };
+
+    let found = crate::cheats::fetch(&client, &game.platform, &rom_name_of(&game)).await?;
+
+    let conn = db.0.lock().unwrap();
+    if !found.is_empty() {
+        db::replace_cheats(&conn, game_id, &found)?;
+    }
+    db::list_cheats(&conn, game_id)
+}
+
+#[tauri::command]
+pub fn list_cheats(db: State<Db>, game_id: i64) -> Result<Vec<Cheat>> {
+    let conn = db.0.lock().unwrap();
+    db::list_cheats(&conn, game_id)
+}
+
+#[tauri::command]
+pub fn set_cheat(db: State<Db>, game_id: i64, index: i64, enabled: bool) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::set_cheat_enabled(&conn, game_id, index, enabled)
+}
+
+/// Switch every cheat for a game on or off in one go.
+#[tauri::command]
+pub fn set_all_cheats(db: State<Db>, game_id: i64, enabled: bool) -> Result<Vec<Cheat>> {
+    let conn = db.0.lock().unwrap();
+    db::set_all_cheats_enabled(&conn, game_id, enabled)?;
+    db::list_cheats(&conn, game_id)
+}
+
+/// Write the switched-on cheats where RetroArch will actually look for them.
+///
+/// RetroArch files cheats by the *core's* display name, not the system's, and
+/// it reads its cheat folder from its own config — so both come from there
+/// rather than from a guess.
+#[tauri::command]
+pub fn save_cheats(db: State<Db>, game_id: i64) -> Result<String> {
+    let conn = db.0.lock().unwrap();
+
+    let game = db::get_game(&conn, game_id)?
+        .ok_or_else(|| AppError::Other("Game not found".into()))?;
+    let cheats = db::list_cheats(&conn, game_id)?;
+    if cheats.is_empty() {
+        return Err(AppError::Other(
+            "No cheats found for this game yet — press Find cheats first".into(),
+        ));
+    }
+    // Switching everything off must still write the file. Refusing here would
+    // leave the previous, still-enabled file in place and the cheats would
+    // stay on in game.
+
+    let retroarch = db::get_setting(&conn, "retroarch_path")?
+        .map(|p| crate::detect::clean_path(&p))
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| AppError::Other("Set the RetroArch path in Settings first".into()))?;
+    let exe = std::path::PathBuf::from(&retroarch);
+
+    let core = launch::resolve_config(&conn, &game.platform)
+        .core
+        .filter(|c| !c.is_empty())
+        .ok_or_else(|| {
+            AppError::Other(format!(
+                "No libretro core set for {} — cheats are filed per core",
+                platforms::display_name(&game.platform)
+            ))
+        })?;
+
+    let config = crate::cheats::read_retroarch_config(&exe);
+    let dir = config
+        .cheat_dir
+        .clone()
+        .map(std::path::PathBuf::from)
+        .or_else(|| crate::cheats::cheat_dir(&exe, None))
+        .ok_or_else(|| AppError::Other("Could not work out RetroArch's cheat folder".into()))?;
+
+    let folder = crate::cheats::core_folder_name(&core);
+    let written = crate::cheats::write_file(
+        &dir,
+        &folder,
+        &rom_name_of(&game),
+        &game.title,
+        &cheats,
+    )?;
+
+    let on = cheats.iter().filter(|c| c.enabled).count();
+    let files = written
+        .iter()
+        .filter_map(|p| p.file_name().and_then(|n| n.to_str()))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let where_to = written
+        .first()
+        .and_then(|p| p.parent())
+        .map(|p| p.to_string_lossy().to_string())
+        .unwrap_or_default();
+
+    Ok(if on == 0 {
+        format!("All cheats cleared — wrote {files} in {where_to}")
+    } else {
+        format!(
+            "{on} cheat{} active — wrote {files} in {where_to}",
+            if on == 1 { "" } else { "s" }
+        )
+    })
+}
+
+/// What RetroArch's own config says, so the UI can explain what will happen.
+#[tauri::command]
+pub fn retroarch_cheat_status(db: State<Db>) -> Result<crate::cheats::RetroArchCheats> {
+    let conn = db.0.lock().unwrap();
+    let retroarch = db::get_setting(&conn, "retroarch_path")?
+        .map(|p| crate::detect::clean_path(&p))
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| AppError::Other("Set the RetroArch path in Settings first".into()))?;
+    Ok(crate::cheats::read_retroarch_config(std::path::Path::new(&retroarch)))
+}
+
+/// Turn on RetroArch's "Auto-Apply Cheats During Game Load".
+#[tauri::command]
+pub fn enable_auto_apply_cheats(db: State<Db>) -> Result<String> {
+    let conn = db.0.lock().unwrap();
+    let retroarch = db::get_setting(&conn, "retroarch_path")?
+        .map(|p| crate::detect::clean_path(&p))
+        .filter(|p| !p.is_empty())
+        .ok_or_else(|| AppError::Other("Set the RetroArch path in Settings first".into()))?;
+    crate::cheats::enable_auto_apply(std::path::Path::new(&retroarch))
+}
+
+// ------------------------------------------------------- hack bundles
+
+const HACK_ARCHIVE: &str = "rom-hack-patch-archive";
+
+/// The downloadable patch bundles in the Internet Archive item.
+#[tauri::command]
+pub async fn list_hack_bundles(app: AppHandle) -> Result<Vec<HackBundle>> {
+    let client = app.state::<AppState>().client.clone();
+    let url = format!("https://archive.org/metadata/{HACK_ARCHIVE}/files");
+
+    let json: serde_json::Value = client
+        .get(&url)
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Could not reach the Internet Archive: {e}")))?
+        .json()
+        .await
+        .map_err(|e| AppError::Other(format!("Unreadable file list: {e}")))?;
+
+    let files = json
+        .get("result")
+        .and_then(|r| r.as_array())
+        .or_else(|| json.as_array())
+        .cloned()
+        .unwrap_or_default();
+
+    let mut out: Vec<HackBundle> = files
+        .iter()
+        .filter_map(|f| {
+            let name = f.get("name")?.as_str()?.to_string();
+            if !name.to_ascii_lowercase().ends_with(".7z") {
+                return None;
+            }
+            let size = f
+                .get("size")
+                .and_then(|s| s.as_str())
+                .and_then(|s| s.parse::<i64>().ok())
+                .unwrap_or(0);
+            Some(HackBundle {
+                url: format!(
+                    "https://archive.org/download/{HACK_ARCHIVE}/{}",
+                    urlencoding::encode(&name)
+                ),
+                name,
+                size,
+            })
+        })
+        .collect();
+
+    out.sort_by(|a, b| a.name.to_lowercase().cmp(&b.name.to_lowercase()));
+    Ok(out)
+}
+
+/// Download one bundle and index every patch inside it. These run to about a
+/// gigabyte, so progress is reported as it streams.
+#[tauri::command]
+pub async fn download_hack_bundle(app: AppHandle, bundle: HackBundle) -> Result<String> {
+    use futures_util::StreamExt;
+    use std::io::Write;
+
+    let (client, media_root) = {
+        let state = app.state::<AppState>();
+        (state.client.clone(), state.media_root.clone())
+    };
+
+    let dir = media_root.join("bundles");
+    std::fs::create_dir_all(&dir)?;
+    let dest = dir.join(crate::hacks::safe_file_name(&bundle.name));
+
+    let resp = client
+        .get(&bundle.url)
+        .send()
+        .await
+        .map_err(|e| AppError::Other(format!("Download failed: {e}")))?;
+    if !resp.status().is_success() {
+        return Err(AppError::Other(format!(
+            "Download failed with {}",
+            resp.status()
+        )));
+    }
+
+    let total = resp.content_length().unwrap_or(bundle.size.max(0) as u64);
+    let mut file = std::fs::File::create(&dest)?;
+    let mut stream = resp.bytes_stream();
+    let mut done: u64 = 0;
+    let mut last_pct = u64::MAX;
+
+    while let Some(chunk) = stream.next().await {
+        let chunk = chunk.map_err(|e| AppError::Other(format!("Download interrupted: {e}")))?;
+        file.write_all(&chunk)?;
+        done += chunk.len() as u64;
+
+        let pct = if total > 0 { done * 100 / total } else { 0 };
+        if pct != last_pct {
+            last_pct = pct;
+            let _ = app.emit(
+                "import-progress",
+                ImportProgress {
+                    scanned: 0,
+                    imported: 0,
+                    skipped: 0,
+                    message: format!(
+                        "Downloading {} — {pct}% of {:.2} GB",
+                        bundle.name,
+                        total as f64 / 1e9
+                    ),
+                    done: false,
+                },
+            );
+        }
+    }
+    drop(file);
+
+    // Hand the finished archive to the importer already built for local files.
+    let handle = app.clone();
+    let (imported, skipped) =
+        tauri::async_runtime::spawn_blocking(move || -> Result<(usize, usize)> {
+            let db_handle = handle.state::<Db>().0.clone();
+            let root = handle.state::<AppState>().media_root.join("patches");
+            std::fs::create_dir_all(&root)?;
+            let emitter = handle.clone();
+            let mut on_progress = move |p: ImportProgress| {
+                let _ = emitter.emit("import-progress", p);
+            };
+            crate::hacks::import(&mut on_progress, &db_handle, &root, &dest)
+        })
+        .await
+        .map_err(|e| AppError::Other(e.to_string()))??;
+
+    Ok(format!(
+        "{} — catalogued {imported} patches, skipped {skipped}",
+        bundle.name
+    ))
+}
