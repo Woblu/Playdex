@@ -871,6 +871,36 @@ pub fn enable_auto_apply_cheats(db: State<Db>) -> Result<String> {
     crate::cheats::enable_auto_apply(std::path::Path::new(&retroarch))
 }
 
+// ------------------------------------------------------ unpacked cache
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CacheUsage {
+    pub bytes: u64,
+    pub entries: usize,
+    pub limit_bytes: u64,
+}
+
+/// What the unpacked-ROM cache is costing right now.
+#[tauri::command]
+pub fn cache_usage(app: AppHandle) -> CacheUsage {
+    let root = app.state::<AppState>().media_root.clone();
+    let (bytes, entries) = launch::cache_usage(&root);
+    CacheUsage {
+        bytes,
+        entries,
+        limit_bytes: launch::CACHE_LIMIT_BYTES,
+    }
+}
+
+/// Empty it. Nothing on disk outside the cache is touched, and every entry is
+/// rebuilt on the next launch of that game.
+#[tauri::command]
+pub fn clear_cache(app: AppHandle) -> Result<u64> {
+    let root = app.state::<AppState>().media_root.clone();
+    launch::clear_cache(&root)
+}
+
 // ------------------------------------------------------- hack bundles
 
 const HACK_ARCHIVE: &str = "rom-hack-patch-archive";

@@ -16,6 +16,7 @@ import type {
 import { SKINS, isSkin, DEFAULT_SKIN, type SkinName } from "../skins/shell";
 import ControllerSetup from "./ControllerSetup";
 import type { PadBindings, PadLayout } from "../gamepad";
+import type { CacheUsage } from "../types";
 import {
   checkForUpdate,
   currentVersion,
@@ -55,6 +56,8 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
   const [providers, setProviders] = useState<ProviderStatus[] | null>(null);
   const [testing, setTesting] = useState(false);
   const [version, setVersion] = useState("");
+  const [cache, setCache] = useState<CacheUsage | null>(null);
+  const [clearing, setClearing] = useState(false);
   const [update, setUpdate] = useState<UpdateInfo | null>(null);
   const [updateNote, setUpdateNote] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
@@ -193,6 +196,9 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
   };
 
   useEffect(() => {
+    if (tab === "emulators") {
+      void api.cacheUsage().then(setCache).catch(() => setCache(null));
+    }
     if (tab === "emulators" && !settings.retroarch_path && detected === null) {
       void runDetect(false);
     }
@@ -486,6 +492,47 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
                   </div>
                 );
               })}
+
+              <div className="section-title">Unpacked games</div>
+              <div className="hint">
+                Disc emulators cannot open an archive, so a game kept as a
+                <code> .7z </code> or <code> .zip </code> is unpacked once and
+                the real ROM handed over. Those copies are kept so the next
+                launch is instant. The originals are never touched, and
+                anything cleared here is simply rebuilt next time you play.
+              </div>
+              <div className="about-row">
+                <div>
+                  <div className="about-version">
+                    {cache
+                      ? `${formatBytes(cache.bytes)} across ${cache.entries} game${cache.entries === 1 ? "" : "s"}`
+                      : "…"}
+                  </div>
+                  {cache && (
+                    <div className="hint">
+                      Kept under {formatBytes(cache.limitBytes)}; past that the
+                      game you have not played in longest is dropped.
+                    </div>
+                  )}
+                </div>
+                <button
+                  className="btn small"
+                  disabled={!cache || cache.entries === 0 || clearing}
+                  onClick={async () => {
+                    setClearing(true);
+                    try {
+                      await api.clearCache();
+                      setCache(await api.cacheUsage());
+                    } catch (err) {
+                      setError(api.errorMessage(err));
+                    } finally {
+                      setClearing(false);
+                    }
+                  }}
+                >
+                  {clearing ? "Clearing…" : "Clear"}
+                </button>
+              </div>
             </>
           )}
 

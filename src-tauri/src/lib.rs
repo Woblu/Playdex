@@ -132,6 +132,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             app_paths,
+            commands::cache_usage,
+            commands::clear_cache,
             commands::list_games,
             commands::get_game,
             commands::list_platforms,

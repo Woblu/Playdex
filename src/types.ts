@@ -211,3 +211,9 @@ export interface LibraryInsights {
   recent: Game[];
   mostPlayed: Game[];
 }
+
+export interface CacheUsage {
+  bytes: number;
+  entries: number;
+  limitBytes: number;
+}

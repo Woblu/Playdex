@@ -100,7 +100,11 @@ export async function installUpdate(
 }
 
 export function formatBytes(n: number): string {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 * 1024) return `${Math.round(n / 1024)} KB`;
-  return `${(n / (1024 * 1024)).toFixed(1)} MB`;
+  const KB = 1024;
+  const MB = KB * 1024;
+  const GB = MB * 1024;
+  if (n < KB) return `${n} B`;
+  if (n < MB) return `${Math.round(n / KB)} KB`;
+  if (n < GB) return `${(n / MB).toFixed(1)} MB`;
+  return `${(n / GB).toFixed(1)} GB`;
 }

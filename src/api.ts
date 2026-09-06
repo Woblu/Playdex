@@ -8,6 +8,7 @@ import type {
   LibraryInsights,
   LibraryStats,
   Cheat,
+  CacheUsage,
   ScanProgress,
   DetectedEmulator,
   HackBundle,
@@ -251,3 +252,8 @@ export function errorMessage(e: unknown): string {
   if (e instanceof Error) return e.message;
   return String(e);
 }
+
+// ------------------------------------------------------- unpacked cache
+
+export const cacheUsage = () => invoke<CacheUsage>("cache_usage");
+export const clearCache = () => invoke<number>("clear_cache");

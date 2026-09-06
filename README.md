@@ -176,22 +176,29 @@ emulator using a command template with `{rom}`. The detail panel shows the exact
 command before you click Play, so a wrong path is obvious. When the emulator
 exits, the session length is added to that game's playtime.
 
-Archives get unpacked first when they have to be. RetroArch ships an `.info`
-file next to every core listing the extensions it accepts, so Playdex reads that
-instead of guessing. Dolphin's reads:
+Archives get unpacked first, but only when they have to be. RetroArch ships an
+`.info` file next to every core listing the extensions it accepts, and no core
+lists `zip` or `7z`. RetroArch handles archives itself in the frontend and never
+passes one to a core, so that list says nothing about archives at all.
+
+What it does say is whether the core loads discs, and disc cores are exactly the
+ones RetroArch will not unpack for. Dolphin's list reads:
 
 ```
 gcm|iso|wbfs|ciso|gcz|elf|dol|dff|tgc|wad|rvz|m3u|wia
 ```
 
-No archive format at all. So a Wii game kept as a `.7z` gets unpacked once into
-the app data folder and the `.wbfs` inside is handed over. A `.zip` of a NES ROM
-is left alone, because Nestopia's list does include `zip` and RetroArch unpacks
-it itself. With no info file to consult, the fallback is to unpack `.7z` only.
+Those are disc formats, so Dolphin wants a path to a real `.wbfs` and a Wii game
+kept as a `.7z` gets unpacked once. A NES or N64 ROM in a `.zip` is left alone,
+because RetroArch opens it itself. With no core to ask (a standalone emulator, or
+a RetroArch that cannot be found) the ROM is unpacked, since a real file always
+works.
 
 Unpacked ROMs are keyed by the archive's checksum and reused, so this costs one
-extraction rather than one per launch. Disc images are several gigabytes though,
-and that space does get used.
+extraction rather than one per launch. The cache is capped at 12 GB and evicts
+the game you have not played in longest; **Settings → Emulators** shows what it
+is using and can empty it. The originals are never touched, and anything cleared
+is rebuilt on the next launch.
 
 ### Cheats
 

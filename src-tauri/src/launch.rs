@@ -129,6 +129,28 @@ fn cache_dir_for(game: &Game, cache_root: &Path) -> PathBuf {
 /// `accepts` is the core's own extension list where we have one. Without it
 /// the rule is just `.7z`: RetroArch unpacks a `.zip` itself for the cores
 /// that want one, but a 7z is no use to anything.
+/// Disc image formats. A core that accepts one of these loads whole discs,
+/// and those cores are the ones RetroArch hands the file path to directly
+/// rather than unpacking for. `bin` is deliberately absent: Mupen64Plus lists
+/// it for N64 dumps and is nothing to do with discs.
+const DISC_FORMATS: &[&str] = &[
+    "iso", "cue", "chd", "gcm", "wbfs", "ciso", "gcz", "rvz", "wia", "gdi", "cdi", "pbp",
+    "cso", "nrg", "m3u",
+];
+
+/// Whether this ROM has to be unpacked before the emulator can open it.
+///
+/// The obvious rule - "unpack when the archive's extension is not on the
+/// core's list" - is wrong, and quietly unpacked every archived game in the
+/// library. No core lists `zip` or `7z`, because RetroArch handles archives
+/// itself in the frontend and never passes one to a core. So the core's list
+/// says nothing at all about archives.
+///
+/// What it does say is whether the core loads discs, and disc cores are
+/// precisely the ones RetroArch will not unpack for: Dolphin wants a path to
+/// a real `.wbfs`, which is why a Wii game in a `.7z` did nothing at all.
+/// Everything else gets its archive opened by RetroArch, so unpacking it here
+/// would only duplicate the ROM on disk for no gain.
 fn needs_extracting(game: &Game, accepts: Option<&[String]>) -> bool {
     let ext = Path::new(&game.path)
         .extension()
@@ -140,10 +162,12 @@ fn needs_extracting(game: &Game, accepts: Option<&[String]>) -> bool {
         return false;
     }
     match accepts {
-        // The core said what it takes. If the archive is not on that list,
-        // it has to come out of the archive first.
-        Some(list) => !list.iter().any(|e| e == &ext),
-        None => ext == "7z",
+        Some(list) => list.iter().any(|e| DISC_FORMATS.contains(&e.as_str())),
+        // No core to ask: a standalone emulator, or a RetroArch we cannot
+        // find. Standalone emulators generally cannot read an archive at all,
+        // and handing over a real file always works, so unpack. The cache is
+        // capped, so guessing this way costs disk rather than correctness.
+        None => true,
     }
 }
 
@@ -164,6 +188,18 @@ pub fn preview_rom_path(game: &Game, cache_root: &Path, accepts: Option<&[String
         .to_string()
 }
 
+/// How much unpacked ROM to keep before throwing the oldest away. Disc images
+/// are gigabytes each, and this lives in the app data directory where nobody
+/// would think to look for it, so it does not get to grow without limit.
+pub const CACHE_LIMIT_BYTES: u64 = 12 * 1024 * 1024 * 1024;
+
+/// Marks an entry as used just now. Ordinary file times move only when a file
+/// is written, so a game launched nightly for a year would still look as old
+/// as the day it was unpacked and be evicted first.
+fn touch(dir: &Path) {
+    let _ = std::fs::write(dir.join(".used"), b"");
+}
+
 /// The path to hand the emulator, unpacking the ROM first if it has to be.
 pub fn playable_path(game: &Game, cache_root: &Path, accepts: Option<&[String]>) -> Result<String> {
     if !needs_extracting(game, accepts) {
@@ -171,7 +207,89 @@ pub fn playable_path(game: &Game, cache_root: &Path, accepts: Option<&[String]>)
     }
     let dir = cache_dir_for(game, cache_root);
     let file = crate::hashing::extract_rom(Path::new(&game.path), &dir)?;
+    touch(&dir);
+    // Best effort: being over the limit is untidy, not a reason to refuse to
+    // start a game.
+    let _ = prune_cache(cache_root, CACHE_LIMIT_BYTES);
     Ok(file.to_string_lossy().to_string())
+}
+
+/// What the unpacked-ROM cache is costing, for somewhere to show it.
+pub fn cache_usage(cache_root: &Path) -> (u64, usize) {
+    let mut bytes = 0;
+    let mut entries = 0;
+    if let Ok(dirs) = std::fs::read_dir(cache_root.join("extracted")) {
+        for dir in dirs.flatten() {
+            entries += 1;
+            bytes += dir_size(&dir.path());
+        }
+    }
+    (bytes, entries)
+}
+
+fn dir_size(dir: &Path) -> u64 {
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
+    };
+    entries
+        .flatten()
+        .map(|e| match e.metadata() {
+            Ok(m) if m.is_dir() => dir_size(&e.path()),
+            Ok(m) => m.len(),
+            Err(_) => 0,
+        })
+        .sum()
+}
+
+/// Throw away everything unpacked. The originals are untouched; anything
+/// deleted here is rebuilt the next time that game is launched.
+pub fn clear_cache(cache_root: &Path) -> Result<u64> {
+    let (bytes, _) = cache_usage(cache_root);
+    let root = cache_root.join("extracted");
+    if root.exists() {
+        std::fs::remove_dir_all(&root)?;
+    }
+    Ok(bytes)
+}
+
+/// Delete least-recently-used entries until the cache fits within `limit`.
+pub fn prune_cache(cache_root: &Path, limit: u64) -> Result<u64> {
+    let root = cache_root.join("extracted");
+    let Ok(dirs) = std::fs::read_dir(&root) else {
+        return Ok(0);
+    };
+
+    let mut entries: Vec<(std::time::SystemTime, u64, PathBuf)> = dirs
+        .flatten()
+        .map(|d| {
+            let path = d.path();
+            let used = std::fs::metadata(path.join(".used"))
+                .or_else(|_| std::fs::metadata(&path))
+                .and_then(|m| m.modified())
+                .unwrap_or(std::time::UNIX_EPOCH);
+            (used, dir_size(&path), path)
+        })
+        .collect();
+
+    let mut total: u64 = entries.iter().map(|(_, size, _)| size).sum();
+    if total <= limit {
+        return Ok(0);
+    }
+
+    // Oldest first, so the one you have not played in longest goes.
+    entries.sort_by_key(|(used, _, _)| *used);
+
+    let mut freed = 0;
+    for (_, size, path) in entries {
+        if total <= limit {
+            break;
+        }
+        if std::fs::remove_dir_all(&path).is_ok() {
+            total = total.saturating_sub(size);
+            freed += size;
+        }
+    }
+    Ok(freed)
 }
 
 /// Build the command for a game without running it — also used by the UI to
@@ -400,36 +518,89 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
-    /// A 7z of a Wii disc has to come out of the archive; a zip of a NES ROM
-    /// does not, because RetroArch unpacks that itself for a core that says
-    /// it accepts one.
+    /// Disc cores get a real file; everything else lets RetroArch open the
+    /// archive itself.
+    ///
+    /// These lists are copied from real `.info` files. Note that not one of
+    /// them mentions `zip` or `7z`: RetroArch handles archives in the
+    /// frontend and never passes one to a core, which is exactly why "is the
+    /// archive on the core's list" was the wrong question to ask.
     #[test]
-    fn only_unpacks_what_the_core_cannot_read() {
-        let dolphin: Vec<String> = ["gcm", "iso", "wbfs", "rvz"]
-            .iter()
+    fn only_unpacks_for_cores_that_cannot_take_an_archive() {
+        let dolphin: Vec<String> =
+            "gcm|iso|wbfs|ciso|gcz|elf|dol|dff|tgc|wad|rvz|m3u|wia"
+                .split('|')
+                .map(|s| s.to_string())
+                .collect();
+        let mesen: Vec<String> = "nes|fds|unf|unif"
+            .split('|')
             .map(|s| s.to_string())
             .collect();
-        let nestopia: Vec<String> = ["nes", "fds", "unf", "zip"]
-            .iter()
+        let mupen: Vec<String> = "n64|v64|z64|ndd|bin|u1"
+            .split('|')
             .map(|s| s.to_string())
             .collect();
 
         let wii = game_at(Path::new("C:/roms/New Super Mario Bros Wii.7z"), None);
+        let nes = game_at(Path::new("C:/roms/Super Mario Bros.zip"), None);
+        let n64 = game_at(Path::new("C:/roms/Super Mario 64.zip"), None);
+
+        // Dolphin loads discs, so it needs the file on disk.
         assert!(needs_extracting(&wii, Some(&dolphin)));
 
-        let nes = game_at(Path::new("C:/roms/Super Mario Bros.zip"), None);
-        assert!(!needs_extracting(&nes, Some(&nestopia)));
+        // These do not, so unpacking would just duplicate the ROM. This is
+        // the bug: both of these were being unpacked.
+        assert!(!needs_extracting(&nes, Some(&mesen)));
+        assert!(!needs_extracting(&n64, Some(&mupen)));
 
-        // A zip handed to a core that does not list zip still has to come out.
-        assert!(needs_extracting(&nes, Some(&dolphin)));
+        // Mupen listing "bin" must not read as a disc core.
+        assert!(!needs_extracting(&n64, Some(&mupen)));
 
-        // A plain ROM is never unpacked.
+        // A plain ROM is never unpacked, whatever the core.
         let plain = game_at(Path::new("C:/roms/Super Mario Bros.nes"), None);
-        assert!(!needs_extracting(&plain, Some(&nestopia)));
+        assert!(!needs_extracting(&plain, Some(&mesen)));
+        assert!(!needs_extracting(&plain, Some(&dolphin)));
 
-        // With no info file to consult, only 7z is assumed unreadable.
+        // No core to ask: unpack, because a standalone emulator usually
+        // cannot read an archive and a real file always works.
         assert!(needs_extracting(&wii, None));
-        assert!(!needs_extracting(&nes, None));
+        assert!(needs_extracting(&nes, None));
+    }
+
+    /// The cache is capped, and the least recently used entry goes first.
+    #[test]
+    fn prunes_the_oldest_entries_when_over_the_limit() {
+        let dir = tmp("prune");
+        let root = dir.join("extracted");
+
+        // Three entries of 4 KB each, touched in a known order.
+        for name in ["oldest", "middle", "newest"] {
+            let entry = root.join(name);
+            std::fs::create_dir_all(&entry).unwrap();
+            std::fs::write(entry.join("rom.bin"), vec![0u8; 4096]).unwrap();
+            touch(&entry);
+            std::thread::sleep(std::time::Duration::from_millis(30));
+        }
+
+        let (before, entries) = cache_usage(&dir);
+        assert_eq!(entries, 3);
+        assert!(before >= 12 * 1024);
+
+        // Room for two of them.
+        let freed = prune_cache(&dir, 9 * 1024).unwrap();
+        assert!(freed > 0);
+
+        assert!(!root.join("oldest").exists(), "the oldest should have gone");
+        assert!(root.join("newest").exists(), "the newest should have stayed");
+
+        // Under the limit already: nothing is touched.
+        assert_eq!(prune_cache(&dir, 100 * 1024).unwrap(), 0);
+
+        // And clearing takes the lot.
+        clear_cache(&dir).unwrap();
+        assert_eq!(cache_usage(&dir), (0, 0));
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     /// The whole path: an archived ROM is unpacked once and the emulator is
