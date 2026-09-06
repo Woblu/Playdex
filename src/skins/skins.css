@@ -101,10 +101,8 @@ body.pad-active [data-nav]:focus {
   background: var(--sw-panel);
   display: grid;
   place-items: center;
-  font-weight: 700;
-  font-size: 15px;
-  color: var(--sw-dim);
   flex: none;
+  overflow: hidden;
 }
 
 .sw-top-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }

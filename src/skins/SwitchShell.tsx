@@ -15,6 +15,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { artUrl } from "../api";
+import Logo from "../components/Logo";
 import SystemIcon from "../components/SystemIcon";
 import type { Game } from "../types";
 import type { ShellProps } from "./shell";
@@ -83,8 +84,11 @@ export default function SwitchShell(props: ShellProps) {
       <div className="sw-vignette" aria-hidden="true" />
 
       <header className="sw-top">
-        <div className="sw-profile" aria-hidden="true">
-          {(games[0]?.title?.[0] ?? "P").toUpperCase()}
+        {/* Where a console puts your profile picture. Playdex has no accounts,
+            so it carries the app's own mark rather than an initial taken from
+            whichever game happens to sort first. */}
+        <div className="sw-profile" title="Playdex">
+          <Logo size={22} />
         </div>
 
         <div className="sw-top-right">
