@@ -302,15 +302,34 @@ body.pad-active [data-nav]:focus {
   color: var(--sw-dim);
   font-size: 13px;
 }
+/* Inert by design: a prompt for a button on the controller, not a control. */
 .sw-hint {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 6px 12px;
-  border-radius: 999px;
+  padding: 6px 4px;
   color: var(--sw-dim);
+  cursor: default;
+  user-select: none;
 }
-.sw-hint.act:hover { background: rgba(255, 255, 255, 0.1); color: var(--sw-text); }
+
+/* What the same corner shows when there is no pad to prompt for. */
+.sw-action {
+  padding: 7px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: var(--sw-text);
+  font-size: 13px;
+  transition: background 0.14s var(--ease), border-color 0.14s var(--ease);
+}
+.sw-action:hover { background: rgba(255, 255, 255, 0.12); }
+.sw-action.primary {
+  background: var(--sw-ring);
+  border-color: var(--sw-ring);
+  color: #06232a;
+  font-weight: 700;
+}
+.sw-action.primary:hover { filter: brightness(1.08); }
 .sw-glyph {
   width: 21px;
   height: 21px;

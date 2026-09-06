@@ -224,33 +224,58 @@ export default function SwitchShell(props: ShellProps) {
           </TrayButton>
         </div>
 
-        <div className="sw-hints">
-          {selected && (
-            <>
-              <button className="sw-hint act" onClick={() => onLaunch(selected.id)}>
-                <span className="sw-glyph">A</span> Start
-              </button>
-              <button
-                className="sw-hint act"
-                onClick={() => onOpenDetail(selected.id)}
-              >
-                <span className="sw-glyph">X</span> Options
-              </button>
-              <button
-                className="sw-hint act"
-                onClick={() => onToggleFavorite(selected)}
-              >
-                <span className="sw-glyph">Y</span>
-                {selected.favorite ? "Unfavourite" : "Favourite"}
-              </button>
-            </>
-          )}
-          {padConnected && (
+        {/* Either a legend or controls, never both. With a pad connected these
+            are labels for buttons your thumb is already on, so they are inert
+            text: hoverable prompts invite a click that the glyph is telling
+            you to make on the controller, and as real buttons they also sat in
+            the pad's own focus order, where the D-pad could land on the legend
+            describing the D-pad. Without a pad the same corner carries actual
+            buttons, since a mouse otherwise has no way to reach Options. */}
+        {padConnected ? (
+          <div className="sw-hints" aria-hidden="true">
+            {selected && (
+              <>
+                <span className="sw-hint">
+                  <span className="sw-glyph">A</span> Start
+                </span>
+                <span className="sw-hint">
+                  <span className="sw-glyph">X</span> Options
+                </span>
+                <span className="sw-hint">
+                  <span className="sw-glyph">Y</span>
+                  {selected.favorite ? "Unfavourite" : "Favourite"}
+                </span>
+              </>
+            )}
             <span className="sw-hint">
               <span className="sw-glyph">B</span> Back
             </span>
-          )}
-        </div>
+          </div>
+        ) : (
+          selected && (
+            <div className="sw-hints">
+              <button
+                className="sw-action primary"
+                onClick={() => onLaunch(selected.id)}
+              >
+                Start
+              </button>
+              <button
+                className="sw-action"
+                onClick={() => onOpenDetail(selected.id)}
+              >
+                Options
+              </button>
+              <button
+                className="sw-action"
+                onClick={() => onToggleFavorite(selected)}
+                title={selected.favorite ? "Remove from favourites" : "Add to favourites"}
+              >
+                {selected.favorite ? "★" : "☆"}
+              </button>
+            </div>
+          )
+        )}
       </footer>
     </div>
   );
