@@ -14,6 +14,8 @@ import type {
 } from "../types";
 
 import { SKINS, isSkin, DEFAULT_SKIN, type SkinName } from "../skins/shell";
+import ControllerSetup from "./ControllerSetup";
+import type { PadBindings, PadLayout } from "../gamepad";
 import {
   checkForUpdate,
   currentVersion,
@@ -740,11 +742,34 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
 
               <div className="section-title">Controller</div>
               <div className="hint">
-                A pad is picked up on its own — no pairing step here. The
-                D-pad or left stick moves between whatever is on screen,
-                including this window; the focus ring thickens while a
-                controller is connected so it can be seen from a sofa.
+                A pad is picked up on its own, with no pairing step. The D-pad
+                or left stick moves between whatever is on screen, including
+                this window, and the focus ring thickens while a controller is
+                connected so it can be seen from a sofa.
               </div>
+
+              <ControllerSetup
+                layout={
+                  (["auto", "standard", "nintendo", "custom"].includes(
+                    settings.pad_layout ?? "",
+                  )
+                    ? settings.pad_layout
+                    : "auto") as PadLayout
+                }
+                custom={parseBindings(settings.pad_bindings)}
+                onChange={(layout, custom) => {
+                  const next = {
+                    ...settings,
+                    pad_layout: layout,
+                    pad_bindings: custom ? JSON.stringify(custom) : "",
+                  };
+                  setSettings(next);
+                  void api.saveSettings(next).catch((err) =>
+                    setError(api.errorMessage(err)),
+                  );
+                }}
+              />
+
               <div className="pad-legend">
                 <span><b>A</b> Play, or press what is focused</span>
                 <span><b>B</b> Back / close</span>
@@ -967,4 +992,15 @@ function SkinPreview({ skin }: { skin: SkinName }) {
       )}
     </svg>
   );
+}
+
+/** Stored as JSON in the settings table; a corrupt value is simply ignored. */
+function parseBindings(raw: string | undefined): PadBindings | null {
+  if (!raw) return null;
+  try {
+    const v = JSON.parse(raw);
+    return typeof v?.confirm === "number" ? (v as PadBindings) : null;
+  } catch {
+    return null;
+  }
 }

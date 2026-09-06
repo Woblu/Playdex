@@ -29,7 +29,11 @@ import {
   activateFocused,
   focusFirst,
   focusInDirection,
+  resolveBindings,
   useGamepad,
+  type PadBindings,
+  type PadInfo,
+  type PadLayout,
 } from "./gamepad";
 
 export default function App() {
@@ -56,6 +60,9 @@ export default function App() {
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [padConnected, setPadConnected] = useState(false);
+  const [padInfo, setPadInfo] = useState<PadInfo | null>(null);
+  const [padLayout, setPadLayout] = useState<PadLayout>("auto");
+  const [padCustom, setPadCustom] = useState<PadBindings | null>(null);
 
   const [scan, setScan] = useState<ScanProgress | null>(null);
   const [scrape, setScrape] = useState<ScrapeProgress | null>(null);
@@ -112,6 +119,16 @@ export default function App() {
     try {
       const values = await api.getSettings();
       setSkin(isSkin(values.ui_skin) ? values.ui_skin : DEFAULT_SKIN);
+
+      const layout = values.pad_layout;
+      if (layout === "auto" || layout === "standard" || layout === "nintendo" || layout === "custom") {
+        setPadLayout(layout);
+      }
+      try {
+        setPadCustom(values.pad_bindings ? JSON.parse(values.pad_bindings) : null);
+      } catch {
+        setPadCustom(null);
+      }
     } catch {
       setSkin(DEFAULT_SKIN);
     }
@@ -309,46 +326,52 @@ export default function App() {
     [platforms, platform],
   );
 
-  useGamepad({
-    onConnected: setPadConnected,
-    onDirection: (dir) => {
-      if (!focusInDirection(dir)) focusFirst();
+  useGamepad(
+    {
+      onConnected: (connected, info) => {
+        setPadConnected(connected);
+        setPadInfo(info);
+      },
+      onDirection: (dir) => {
+        if (!focusInDirection(dir)) focusFirst();
+      },
+      onConfirm: () => {
+        // On a game tile, the obvious thing a pad should do is start the game;
+        // anywhere else, press what is focused.
+        const active = document.activeElement as HTMLElement | null;
+        const id = active?.dataset.gameId;
+        if (id && !anyModalOpen) {
+          handleLaunch(Number(id));
+          return;
+        }
+        activateFocused();
+      },
+      onBack: closeTopmost,
+      onAlt: () => {
+        const active = document.activeElement as HTMLElement | null;
+        const raw = active?.dataset.gameId;
+        const id = raw ? Number(raw) : selectedId;
+        if (id !== null && id !== undefined && !anyModalOpen) {
+          setSelectedId(id);
+          setDetailOpen(true);
+        }
+      },
+      onAux: () => {
+        const active = document.activeElement as HTMLElement | null;
+        const raw = active?.dataset.gameId;
+        const id = raw ? Number(raw) : selectedId;
+        const game = games.find((g) => g.id === id);
+        if (game && !anyModalOpen) void handleToggleFavorite(game);
+      },
+      onStart: () => {
+        if (selectedId !== null && !anyModalOpen) handleLaunch(selectedId);
+      },
+      onShoulder: (side) => {
+        if (!anyModalOpen) stepPlatform(side === "left" ? -1 : 1);
+      },
     },
-    onConfirm: () => {
-      // On a game tile, the obvious thing a pad should do is start the game;
-      // anywhere else, press what is focused.
-      const active = document.activeElement as HTMLElement | null;
-      const id = active?.dataset.gameId;
-      if (id && !anyModalOpen) {
-        handleLaunch(Number(id));
-        return;
-      }
-      activateFocused();
-    },
-    onBack: closeTopmost,
-    onAlt: () => {
-      const active = document.activeElement as HTMLElement | null;
-      const raw = active?.dataset.gameId;
-      const id = raw ? Number(raw) : selectedId;
-      if (id !== null && id !== undefined && !anyModalOpen) {
-        setSelectedId(id);
-        setDetailOpen(true);
-      }
-    },
-    onAux: () => {
-      const active = document.activeElement as HTMLElement | null;
-      const raw = active?.dataset.gameId;
-      const id = raw ? Number(raw) : selectedId;
-      const game = games.find((g) => g.id === id);
-      if (game && !anyModalOpen) void handleToggleFavorite(game);
-    },
-    onStart: () => {
-      if (selectedId !== null && !anyModalOpen) handleLaunch(selectedId);
-    },
-    onShoulder: (side) => {
-      if (!anyModalOpen) stepPlatform(side === "left" ? -1 : 1);
-    },
-  });
+    { bindings: resolveBindings(padLayout, padCustom, padInfo) },
+  );
 
   // ------------------------------------------------------------ rendering
 

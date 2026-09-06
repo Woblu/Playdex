@@ -46,6 +46,42 @@ body.pad-active [data-nav]:focus {
   flex-direction: column;
   background: linear-gradient(180deg, var(--sw-bg) 0%, var(--sw-bg-2) 100%);
   color: var(--sw-text);
+  isolation: isolate;
+}
+
+/* Backdrop: the selected game's art, blown up and blurred past reading, so
+   the space between icons carries the colour of whatever you are on instead
+   of being flat grey. Kept dim enough that nothing in front loses contrast. */
+.sw-backdrop {
+  position: absolute;
+  inset: -8%;
+  z-index: -2;
+  overflow: hidden;
+}
+.sw-backdrop img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  filter: blur(64px) saturate(2);
+  opacity: 0.62;
+  transform: scale(1.3);
+  animation: sw-fade 0.5s var(--ease);
+}
+@keyframes sw-fade {
+  from { opacity: 0; }
+  to { opacity: 0.62; }
+}
+
+/* Darkens the edges and the bars, so the glow reads as light behind the
+   icons rather than a wash over the whole window. */
+.sw-vignette {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(125% 80% at 50% 44%, transparent 0%, rgba(18, 18, 22, 0.34) 62%, rgba(14, 14, 17, 0.82) 100%),
+    linear-gradient(180deg, rgba(18, 18, 22, 0.7) 0%, transparent 14%, transparent 80%, rgba(18, 18, 22, 0.78) 100%);
 }
 
 /* ---- status bar: thin, and mostly empty on purpose */
@@ -219,7 +255,8 @@ body.pad-active [data-nav]:focus {
   gap: 18px;
   padding: 14px 34px 18px;
   flex: none;
-  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  backdrop-filter: blur(6px);
 }
 
 .sw-tray { display: flex; gap: 10px; }
@@ -612,3 +649,42 @@ body.pad-active [data-nav]:focus {
 }
 .about-row > div { flex: 1; }
 .about-version { font-weight: 600; }
+
+/* ---------------------------------------------------- controller setup ---
+   What the pad actually reports, and a way to say which button is which. */
+
+.pad-status {
+  margin: 10px 0 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
+}
+.pad-warn { color: var(--warn); }
+
+.pad-capture {
+  margin-top: 10px;
+  border-left-color: var(--accent);
+}
+
+.pad-tester {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+}
+.pad-blip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  font-size: 12px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
+  transition: background 0.12s var(--ease), color 0.12s var(--ease);
+}
+.pad-blip.lit {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #06121f;
+  font-weight: 600;
+}

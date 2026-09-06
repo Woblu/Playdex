@@ -67,8 +67,21 @@ export default function SwitchShell(props: ShellProps) {
     if (search) setSearchOpen(true);
   }, [search]);
 
+  const backdrop = artUrl(selected?.coverPath ?? null);
+
   return (
     <div className="switch-shell">
+      {/* The art of whatever is selected, blown up and blurred past reading.
+          A home screen that is only flat grey has nothing to look at between
+          the icons, and this fills it with something that belongs to the game
+          you are actually on. Keyed so it cross-fades rather than snapping. */}
+      <div className="sw-backdrop" aria-hidden="true">
+        {backdrop && (
+          <img key={backdrop} src={backdrop} alt="" />
+        )}
+      </div>
+      <div className="sw-vignette" aria-hidden="true" />
+
       <header className="sw-top">
         <div className="sw-profile" aria-hidden="true">
           {(games[0]?.title?.[0] ?? "P").toUpperCase()}
