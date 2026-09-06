@@ -87,8 +87,9 @@ export default function SwitchShell(props: ShellProps) {
         {/* Where a console puts your profile picture. Playdex has no accounts,
             so it carries the app's own mark rather than an initial taken from
             whichever game happens to sort first. */}
-        <div className="sw-profile" title="Playdex">
-          <Logo size={22} />
+        <div className="sw-profile">
+          <Logo size={26} />
+          <span className="sw-wordmark">Playdex</span>
         </div>
 
         <div className="sw-top-right">

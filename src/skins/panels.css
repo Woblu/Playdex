@@ -1,0 +1,276 @@
+/* ==========================================================================
+   Shared panels, dressed for whichever skin is running.
+
+   Settings, play history, the homebrew browser and a game's own page are one
+   set of components. Only their presentation changes here, so no feature ends
+   up living in one skin and missing from another.
+
+   On the desktop skin they stay what they were: a centred dialog, a panel
+   sliding in from the right. On the console and living-room skins a floating
+   dialog is wrong twice over - it is the wrong shape for a screen you are
+   sitting back from, and it breaks the illusion the skin exists to create.
+   Both consoles answer this the same way, so we do too: the panel becomes the
+   whole screen, and going back is how you leave.
+   ========================================================================== */
+
+/* The shared components are built from design tokens, so re-pointing the
+   tokens dresses every button, field, notice and focus ring at once. Far
+   fewer rules than restyling each control, and anything added later inherits
+   the skin without needing a line here. */
+
+body.skin-switch {
+  --bg: #2a2a2e;
+  --surface: #303036;
+  --surface-2: #35353c;
+  --surface-3: #3e3e46;
+  --border: rgba(255, 255, 255, 0.09);
+  --border-strong: rgba(255, 255, 255, 0.17);
+  --text: #f0f0f2;
+  --text-2: #c2c2ca;
+  --text-3: #90909a;
+  --accent: #00c3e3;
+  --accent-soft: rgba(0, 195, 227, 0.16);
+}
+
+body.skin-steam {
+  --bg: #10161f;
+  --surface: #182231;
+  --surface-2: #1d2937;
+  --surface-3: #253341;
+  --border: rgba(255, 255, 255, 0.08);
+  --border-strong: rgba(255, 255, 255, 0.16);
+  --text: #e8eef7;
+  --text-2: #bac7d7;
+  --text-3: #8fa2ba;
+  --accent: #4c9be8;
+  --accent-soft: rgba(76, 155, 232, 0.16);
+}
+
+/* A full-height page needs its body to take the slack, or the footer stops
+   wherever the content happened to end and floats in the middle. */
+body.skin-switch .modal-body,
+body.skin-steam .modal-body {
+  flex: 1;
+}
+
+/* Cyan on near-black wants dark text on the filled button, not white. */
+body.skin-switch .btn.primary { color: #06232a; }
+body.skin-steam .btn.primary { color: #04121f; }
+
+/* -------------------------------------------------------------- console --- */
+
+body.skin-switch .overlay {
+  padding: 0;
+  display: block;
+  background: var(--sw-bg);
+  backdrop-filter: none;
+}
+
+body.skin-switch .modal {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: linear-gradient(180deg, var(--sw-bg) 0%, var(--sw-bg-2) 100%);
+  color: var(--sw-text);
+}
+
+/* The title becomes a page heading rather than a dialog's caption. */
+body.skin-switch .modal-head {
+  padding: 26px 46px 14px;
+  border-bottom: none;
+  font-size: 27px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+body.skin-switch .tabs {
+  gap: 8px;
+  padding: 0 46px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+body.skin-switch .tab {
+  padding: 9px 18px;
+  border-radius: 999px;
+  border-bottom: none;
+  margin-bottom: 0;
+  font-size: 14px;
+  color: var(--sw-dim);
+  background: rgba(255, 255, 255, 0.06);
+}
+body.skin-switch .tab:hover { background: rgba(255, 255, 255, 0.13); color: var(--sw-text); }
+body.skin-switch .tab.active {
+  background: var(--sw-ring);
+  color: #06232a;
+  font-weight: 600;
+}
+
+/* Content stops short of the full width, since a line of text running the
+   width of a television is unreadable. */
+body.skin-switch .modal-body {
+  padding: 24px 46px 40px;
+  max-width: 940px;
+}
+
+body.skin-switch .modal-foot {
+  padding: 16px 46px 26px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  justify-content: flex-start;
+}
+
+/* A game's page, full screen rather than a strip down the side. */
+body.skin-switch .detail {
+  left: 0;
+  width: 100%;
+  max-width: none;
+  border-left: none;
+  box-shadow: none;
+  background: linear-gradient(180deg, var(--sw-bg) 0%, var(--sw-bg-2) 100%);
+  color: var(--sw-text);
+}
+body.skin-switch .detail-hero { height: 34vh; min-height: 220px; }
+body.skin-switch .detail-hero::after {
+  background: linear-gradient(to bottom, transparent 15%, var(--sw-bg-2));
+}
+body.skin-switch .detail-body {
+  padding: 0 46px 44px;
+  max-width: 940px;
+  margin: 0 auto;
+  width: 100%;
+}
+body.skin-switch .detail-title { font-size: 30px; }
+body.skin-switch .detail-close {
+  top: 18px;
+  right: 22px;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  font-size: 17px;
+}
+
+body.skin-switch .section-title { color: var(--sw-text); }
+body.skin-switch .hint { color: var(--sw-dim); }
+
+/* ---------------------------------------------------------- big picture --- */
+
+body.skin-steam .overlay {
+  padding: 0;
+  display: block;
+  background: var(--st-bg);
+  backdrop-filter: none;
+}
+
+body.skin-steam .modal {
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  background: var(--st-bg);
+  color: var(--st-text);
+}
+
+body.skin-steam .modal-head {
+  padding: 28px 52px 16px;
+  border-bottom: none;
+  font-size: 30px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+body.skin-steam .tabs {
+  gap: 6px;
+  padding: 0 52px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+body.skin-steam .tab {
+  padding: 10px 20px;
+  border-radius: 5px;
+  border-bottom: none;
+  margin-bottom: 0;
+  font-size: 15px;
+  color: var(--st-dim);
+}
+body.skin-steam .tab:hover { background: rgba(255, 255, 255, 0.06); color: var(--st-text); }
+body.skin-steam .tab.active {
+  background: var(--st-accent);
+  color: #04121f;
+  font-weight: 600;
+}
+
+body.skin-steam .modal-body {
+  padding: 26px 52px 44px;
+  max-width: 1000px;
+  font-size: 15px;
+}
+
+body.skin-steam .modal-foot {
+  padding: 18px 52px 28px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  justify-content: flex-start;
+}
+
+body.skin-steam .detail {
+  left: 0;
+  width: 100%;
+  max-width: none;
+  border-left: none;
+  box-shadow: none;
+  background: var(--st-bg);
+  color: var(--st-text);
+}
+body.skin-steam .detail-hero { height: 38vh; min-height: 240px; }
+body.skin-steam .detail-hero::after {
+  background: linear-gradient(to bottom, transparent 10%, var(--st-bg));
+}
+body.skin-steam .detail-body {
+  padding: 0 52px 46px;
+  max-width: 1000px;
+  margin: 0 auto;
+  width: 100%;
+  font-size: 15px;
+}
+body.skin-steam .detail-title { font-size: 34px; }
+body.skin-steam .detail-close {
+  top: 18px;
+  right: 24px;
+  width: 38px;
+  height: 38px;
+  border-radius: 5px;
+  font-size: 17px;
+}
+
+body.skin-steam .section-title { color: var(--st-text); }
+body.skin-steam .hint { color: var(--st-dim); }
+
+/* ---- both console skins: bigger touch targets, sat-back type sizes ---- */
+
+body.skin-switch .btn,
+body.skin-steam .btn {
+  padding: 9px 18px;
+  border-radius: 999px;
+  font-size: 14px;
+}
+
+body.skin-switch .btn.small,
+body.skin-steam .btn.small {
+  padding: 7px 15px;
+  font-size: 13.5px;
+}
+
+body.skin-switch input,
+body.skin-switch select,
+body.skin-switch textarea,
+body.skin-steam input,
+body.skin-steam select,
+body.skin-steam textarea {
+  padding: 10px 12px;
+  font-size: 14px;
+}

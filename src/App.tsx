@@ -291,6 +291,15 @@ export default function App() {
     document.body.classList.toggle("pad-active", padConnected);
   }, [padConnected]);
 
+  // The skin is announced on <body> so the shared panels - settings, stats,
+  // homebrew, a game's own page - can dress themselves to match. A desktop
+  // dialog dropped into a console screen undoes the whole illusion, and these
+  // are the same components either way; only their presentation changes.
+  useEffect(() => {
+    document.body.classList.remove("skin-launchbox", "skin-switch", "skin-steam");
+    document.body.classList.add(`skin-${skin}`);
+  }, [skin]);
+
   // Land somewhere sensible when the view changes under the pad, so the first
   // press moves rather than having to first find a starting point.
   useEffect(() => {

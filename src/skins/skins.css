@@ -31,7 +31,7 @@ body.pad-active [data-nav]:focus {
    screen is not. Tying it to viewport height keeps the row the same share of
    the screen at any size, the way it is on the hardware. */
 
-.switch-shell {
+body.skin-switch {
   --sw-bg: #2a2a2e;
   --sw-bg-2: #232327;
   --sw-panel: #3a3a40;
@@ -39,7 +39,9 @@ body.pad-active [data-nav]:focus {
   --sw-dim: #a0a0a8;
   --sw-ring: #00c3e3;
   --sw-tile: clamp(150px, 30vh, 340px);
+}
 
+.switch-shell {
   position: absolute;
   inset: 0;
   display: flex;
@@ -94,15 +96,21 @@ body.pad-active [data-nav]:focus {
   flex: none;
 }
 
+/* No circle. A pixel-art mark shrunk inside a grey bubble reads as a sticker
+   stuck on the screen, and there is no profile here for a bubble to stand for
+   anyway - Playdex has no accounts. */
 .sw-profile {
-  width: 40px;
-  height: 40px;
-  border-radius: 50%;
-  background: var(--sw-panel);
-  display: grid;
-  place-items: center;
+  display: flex;
+  align-items: center;
+  gap: 9px;
   flex: none;
-  overflow: hidden;
+  opacity: 0.85;
+}
+.sw-wordmark {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: var(--sw-text);
 }
 
 .sw-top-right { margin-left: auto; display: flex; align-items: center; gap: 6px; }
@@ -345,13 +353,15 @@ body.pad-active [data-nav]:focus {
    Hero band, left rail, wide capsules. Everything a size up, for a screen you
    are sitting back from. */
 
-.steam-shell {
+body.skin-steam {
   --st-bg: #10161f;
   --st-panel: #182231;
   --st-text: #e8eef7;
   --st-dim: #8fa2ba;
   --st-accent: #4c9be8;
+}
 
+.steam-shell {
   position: absolute;
   inset: 0;
   display: flex;
