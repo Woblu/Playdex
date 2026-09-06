@@ -132,9 +132,9 @@ body.skin-switch .detail {
   background: linear-gradient(180deg, var(--sw-bg) 0%, var(--sw-bg-2) 100%);
   color: var(--sw-text);
 }
-body.skin-switch .detail-hero { height: 34vh; min-height: 220px; }
+body.skin-switch .detail-hero { height: 30vh; min-height: 200px; }
 body.skin-switch .detail-hero::after {
-  background: linear-gradient(to bottom, transparent 15%, var(--sw-bg-2));
+  background: linear-gradient(to bottom, transparent 20%, var(--sw-bg-2));
 }
 body.skin-switch .detail-body {
   padding: 0 46px 44px;
@@ -226,9 +226,9 @@ body.skin-steam .detail {
   background: var(--st-bg);
   color: var(--st-text);
 }
-body.skin-steam .detail-hero { height: 38vh; min-height: 240px; }
+body.skin-steam .detail-hero { height: 32vh; min-height: 220px; }
 body.skin-steam .detail-hero::after {
-  background: linear-gradient(to bottom, transparent 10%, var(--st-bg));
+  background: linear-gradient(to bottom, transparent 20%, var(--st-bg));
 }
 body.skin-steam .detail-body {
   padding: 0 52px 46px;
@@ -273,4 +273,14 @@ body.skin-steam select,
 body.skin-steam textarea {
   padding: 10px 12px;
   font-size: 14px;
+}
+
+/* The title is pulled up over the hero by a negative margin, which works in
+   the narrow desktop panel where the hero is short. Full screen it does not:
+   `.detail-body` scrolls, and a scroll container clips whatever is dragged
+   above its top edge, so the title came out sliced in half by the bottom of
+   the artwork. Full-screen pages give it room instead of an overlap. */
+body.skin-switch .detail-title,
+body.skin-steam .detail-title {
+  margin-top: 20px;
 }
