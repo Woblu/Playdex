@@ -40,6 +40,7 @@ export default function SwitchShell(props: ShellProps) {
     onOpenSettings,
     onOpenStats,
     onScan,
+    registerBack,
   } = props;
 
   const [view, setView] = useState<"home" | "all">("home");
@@ -66,6 +67,24 @@ export default function SwitchShell(props: ShellProps) {
   useEffect(() => {
     if (search) setSearchOpen(true);
   }, [search]);
+
+  // Back leaves All software, and closes the search box, before it means
+  // anything else. Both are views inside this skin that App cannot see, and
+  // "go over and click Home" is not an answer when you are holding a pad.
+  useEffect(() => {
+    registerBack(() => {
+      if (view === "all") {
+        setView("home");
+        return true;
+      }
+      if (searchOpen && !search) {
+        setSearchOpen(false);
+        return true;
+      }
+      return false;
+    });
+    return () => registerBack(null);
+  }, [registerBack, view, searchOpen, search]);
 
   const backdrop = artUrl(selected?.coverPath ?? null);
 

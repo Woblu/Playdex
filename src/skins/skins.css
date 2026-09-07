@@ -58,9 +58,15 @@ body.skin-switch {
 /* Backdrop: the selected game's art, blown up and blurred past reading, so
    the space between icons carries the colour of whatever you are on instead
    of being flat grey. Kept dim enough that nothing in front loses contrast. */
+/* Sized exactly to the shell, never past it. A child hanging over the right
+   or bottom edge counts as scrollable overflow even when the parent clips it,
+   and `overflow: hidden` still scrolls when the browser is asked to reveal
+   something. That is how focusing the last tile used to drag the clock, the
+   tray and the background sideways with it. The bleed the blur needs comes
+   from the transform on the image below, which creates no overflow at all. */
 .sw-backdrop {
   position: absolute;
-  inset: -8%;
+  inset: 0;
   z-index: -2;
   overflow: hidden;
 }

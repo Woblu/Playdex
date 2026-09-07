@@ -313,8 +313,7 @@ export function focusInDirection(dir: NavDirection): boolean {
 
   const active = document.activeElement as HTMLElement | null;
   if (!active || !items.includes(active)) {
-    items[0].focus();
-    scrollIntoViewIfNeeded(items[0]);
+    focusQuietly(items[0]);
     return true;
   }
 
@@ -344,13 +343,63 @@ export function focusInDirection(dir: NavDirection): boolean {
   }
 
   if (!best) return false;
-  best.focus();
-  scrollIntoViewIfNeeded(best);
+  focusQuietly(best);
   return true;
 }
 
-function scrollIntoViewIfNeeded(el: HTMLElement) {
-  el.scrollIntoView({ block: "nearest", inline: "nearest", behavior: "smooth" });
+/**
+ * The nearest ancestor that is genuinely meant to scroll.
+ *
+ * `overflow: hidden` is excluded deliberately. It is still scrollable through
+ * script, so anything that overflows a clipped box can be dragged into view by
+ * the browser, taking the whole layout with it - which is a bug every time,
+ * never what was wanted.
+ */
+function scrollParent(el: HTMLElement): HTMLElement | null {
+  let node = el.parentElement;
+  while (node) {
+    const style = getComputedStyle(node);
+    if (
+      (/(auto|scroll)/.test(style.overflowX) && node.scrollWidth > node.clientWidth) ||
+      (/(auto|scroll)/.test(style.overflowY) && node.scrollHeight > node.clientHeight)
+    ) {
+      return node;
+    }
+    node = node.parentElement;
+  }
+  return null;
+}
+
+/**
+ * Bring an element into view by scrolling only the box that is supposed to
+ * scroll, rather than letting the browser walk up the tree scrolling whatever
+ * it finds.
+ */
+export function bringIntoView(el: HTMLElement) {
+  const parent = scrollParent(el);
+  if (!parent) return;
+
+  const box = parent.getBoundingClientRect();
+  const rect = el.getBoundingClientRect();
+  const margin = 24;
+
+  if (rect.left < box.left) {
+    parent.scrollLeft += rect.left - box.left - margin;
+  } else if (rect.right > box.right) {
+    parent.scrollLeft += rect.right - box.right + margin;
+  }
+
+  if (rect.top < box.top) {
+    parent.scrollTop += rect.top - box.top - margin;
+  } else if (rect.bottom > box.bottom) {
+    parent.scrollTop += rect.bottom - box.bottom + margin;
+  }
+}
+
+/** Focus without letting the browser do its own scrolling on the way. */
+function focusQuietly(el: HTMLElement) {
+  el.focus({ preventScroll: true });
+  bringIntoView(el);
 }
 
 /**
@@ -371,5 +420,6 @@ export function activateFocused(): boolean {
 export function focusFirst(): void {
   const items = candidates();
   const preferred = items.find((el) => el.dataset.navDefault !== undefined);
-  (preferred ?? items[0])?.focus();
+  const target = preferred ?? items[0];
+  if (target) focusQuietly(target);
 }

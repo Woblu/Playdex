@@ -69,6 +69,17 @@ export interface ShellProps {
   /** Open the full detail panel — everything a skin does not draw itself. */
   onOpenDetail: (id: number) => void;
 
+  /**
+   * Let a skin claim the Back button for its own internal state.
+   *
+   * A skin can be somewhere the app knows nothing about — the console skin's
+   * "All software" grid is a view inside the skin, not a panel App opened —
+   * and Back should leave it before it starts closing anything else. Register
+   * a handler that returns true when it dealt with the press, or null to stop
+   * claiming it.
+   */
+  registerBack: (handler: (() => boolean) | null) => void;
+
   onScan: () => void;
   onScrape: () => void;
   onOpenSettings: () => void;

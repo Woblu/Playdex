@@ -263,6 +263,11 @@ A pad is picked up on its own, with no pairing step.
 | LB / RB | Previous / next system |
 | Start | Play the selection |
 
+Back steps out of wherever you are before it closes anything: the console
+skin's "All software" grid and its search box are views inside the skin, so
+Back leaves those first. Escape does the same thing, so there is always a way
+out without a pad.
+
 Movement is geometric rather than a hand-written map of what sits next to what.
 Everything ordinarily interactive is a candidate, and the nearest thing in the
 direction you pushed wins, weighted so travel along the axis beats drift across

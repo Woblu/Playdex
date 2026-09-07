@@ -60,6 +60,9 @@ export default function App() {
   const [detailOpen, setDetailOpen] = useState(false);
   const [padConnected, setPadConnected] = useState(false);
   const [dropNote, setDropNote] = useState<string | null>(null);
+  // Set by whichever skin is running, so Back can step out of a view that
+  // belongs to the skin before it starts closing panels.
+  const skinBack = useRef<(() => boolean) | null>(null);
   const [padInfo, setPadInfo] = useState<PadInfo | null>(null);
   const [padLayout, setPadLayout] = useState<PadLayout>("auto");
   const [padCustom, setPadCustom] = useState<PadBindings | null>(null);
@@ -344,8 +347,25 @@ export default function App() {
     if (statsOpen) return setStatsOpen(false);
     if (settingsOpen) return setSettingsOpen(false);
     if (detailOpen) return setDetailOpen(false);
+    // The skin gets its own state back before the desktop rules apply.
+    if (skinBack.current?.()) return;
     if (skin === "launchbox" && selectedId !== null) return setSelectedId(null);
   }, [statsOpen, settingsOpen, detailOpen, skin, selectedId]);
+
+  // Escape does what Back does, so the same way out exists without a pad.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      const el = document.activeElement;
+      // Leave a text field alone; Escape there means "stop typing".
+      if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) {
+        return;
+      }
+      closeTopmost();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [closeTopmost]);
 
   // Shoulder buttons page through systems, which is the one move that is
   // tedious with a stick and instant with a bumper.
@@ -448,6 +468,9 @@ export default function App() {
     onOpenDetail: (id) => {
       setSelectedId(id);
       setDetailOpen(true);
+    },
+    registerBack: (handler) => {
+      skinBack.current = handler;
     },
     onScan: handleScan,
     onScrape: handleScrape,
