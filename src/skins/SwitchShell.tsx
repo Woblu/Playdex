@@ -19,6 +19,7 @@ import Logo from "../components/Logo";
 import SystemIcon from "../components/SystemIcon";
 import type { Game } from "../types";
 import type { ShellProps } from "./shell";
+import { bringIntoView } from "../gamepad";
 
 export default function SwitchShell(props: ShellProps) {
   const {
@@ -59,7 +60,9 @@ export default function SwitchShell(props: ShellProps) {
     const tile = document.querySelector<HTMLElement>(
       `.switch-shell [data-game-id="${selectedId}"]`,
     );
-    tile?.scrollIntoView({ block: "nearest", inline: "center", behavior: "smooth" });
+    // Not scrollIntoView: that walks up the tree scrolling any ancestor it
+    // can, which is what used to drag the clock and the background sideways.
+    if (tile) bringIntoView(tile);
   }, [selectedId, view]);
 
   // A search box that is always open would be one more thing on a screen that
@@ -203,8 +206,10 @@ export default function SwitchShell(props: ShellProps) {
 
           {/* The name sits under the icons as a caption, not a headline —
               the artwork is meant to be what you read. */}
-          <div className="sw-label">{selected?.title ?? " "}</div>
-          <div className="sw-sub">
+          <div className="sw-label" key={`t-${selectedId ?? "none"}`}>
+            {selected?.title ?? " "}
+          </div>
+          <div className="sw-sub" key={`s-${selectedId ?? "none"}`}>
             {selected
               ? [
                   selected.developer || selected.publisher,

@@ -173,6 +173,8 @@ body.skin-switch {
   overflow-x: auto;
   padding: 30px 34px;
   scrollbar-width: none;
+  /* A backstop: anything that moves this row eases, whoever asked. */
+  scroll-behavior: smooth;
   /* A flex item will not shrink below its own content unless told to, so
      without this the row grew wider than the window instead of scrolling
      inside it. The whole shell then scrolled sideways and the clock and the
@@ -181,17 +183,27 @@ body.skin-switch {
 }
 .sw-row::-webkit-scrollbar { display: none; }
 
+/* The caption is re-mounted whenever the selection changes, so it fades in
+   with the artwork behind it instead of snapping to the new title while
+   everything else is still moving. */
 .sw-label {
   padding: 0 34px;
   font-size: clamp(17px, 2vh, 24px);
   font-weight: 500;
   min-height: 1.4em;
+  animation: sw-caption 0.28s var(--ease);
 }
 .sw-sub {
   padding: 2px 34px 0;
   color: var(--sw-dim);
   font-size: 13px;
   min-height: 1.4em;
+  animation: sw-caption 0.28s var(--ease) 0.04s backwards;
+}
+
+@keyframes sw-caption {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: none; }
 }
 
 .sw-tile {
@@ -203,7 +215,11 @@ body.skin-switch {
   background: var(--sw-panel);
   overflow: hidden;
   padding: 0;
-  transition: transform 0.16s var(--ease), box-shadow 0.16s var(--ease);
+  /* Slower than a click needs, and overshooting slightly at the end, so the
+     selected game settles into place rather than snapping to it. */
+  transition:
+    transform 0.26s cubic-bezier(0.22, 1.2, 0.36, 1),
+    box-shadow 0.2s var(--ease);
 }
 .sw-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
 
@@ -840,3 +856,21 @@ body.skin-steam {
 .dat-verdict.good { border-left-color: var(--good); }
 .dat-verdict.warn { border-left-color: var(--warn); }
 .dat-verdict.quiet { border-left-color: var(--border-strong); }
+
+/* Nothing here animates for anyone who has asked for less motion. */
+@media (prefers-reduced-motion: reduce) {
+  .sw-row,
+  .sw-grid,
+  .st-shelf {
+    scroll-behavior: auto;
+  }
+  .sw-label,
+  .sw-sub,
+  .sw-backdrop img {
+    animation: none;
+  }
+  .sw-tile,
+  .st-capsule {
+    transition: none;
+  }
+}

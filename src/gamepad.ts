@@ -370,30 +370,53 @@ function scrollParent(el: HTMLElement): HTMLElement | null {
   return null;
 }
 
+/** Someone who has asked for less motion gets none of this. */
+function wantsMotion(): boolean {
+  return !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+}
+
 /**
  * Bring an element into view by scrolling only the box that is supposed to
  * scroll, rather than letting the browser walk up the tree scrolling whatever
  * it finds.
+ *
+ * It eases rather than jumps. Moving along a row of games is the main thing
+ * anyone does in the console skin, and landing each one instantly reads as a
+ * flicker rather than as movement: with nothing travelling between positions
+ * there is no sense of having gone anywhere.
+ *
+ * `lead` is how far ahead of the edge to start sliding, as a share of the
+ * element's own size. Waiting until something is genuinely off-screen means
+ * the row sits still, still, still, then lurches; starting earlier keeps the
+ * next game visible before you reach for it.
  */
-export function bringIntoView(el: HTMLElement) {
+export function bringIntoView(el: HTMLElement, lead = 0.6) {
   const parent = scrollParent(el);
   if (!parent) return;
 
   const box = parent.getBoundingClientRect();
   const rect = el.getBoundingClientRect();
-  const margin = 24;
+  const behavior: ScrollBehavior = wantsMotion() ? "smooth" : "auto";
 
-  if (rect.left < box.left) {
-    parent.scrollLeft += rect.left - box.left - margin;
-  } else if (rect.right > box.right) {
-    parent.scrollLeft += rect.right - box.right + margin;
+  const marginX = rect.width * lead;
+  const marginY = rect.height * lead;
+
+  let left = parent.scrollLeft;
+  if (rect.left - marginX < box.left) {
+    left += rect.left - marginX - box.left;
+  } else if (rect.right + marginX > box.right) {
+    left += rect.right + marginX - box.right;
   }
 
-  if (rect.top < box.top) {
-    parent.scrollTop += rect.top - box.top - margin;
-  } else if (rect.bottom > box.bottom) {
-    parent.scrollTop += rect.bottom - box.bottom + margin;
+  let top = parent.scrollTop;
+  if (rect.top - marginY < box.top) {
+    top += rect.top - marginY - box.top;
+  } else if (rect.bottom + marginY > box.bottom) {
+    top += rect.bottom + marginY - box.bottom;
   }
+
+  if (left === parent.scrollLeft && top === parent.scrollTop) return;
+  parent.scrollTo({ left, top, behavior });
 }
 
 /** Focus without letting the browser do its own scrolling on the way. */

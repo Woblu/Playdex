@@ -13,6 +13,7 @@ import { artUrl } from "../api";
 import SystemIcon from "../components/SystemIcon";
 import type { Game } from "../types";
 import type { ShellProps } from "./shell";
+import { bringIntoView } from "../gamepad";
 
 export default function SteamShell(props: ShellProps) {
   const {
@@ -46,9 +47,10 @@ export default function SteamShell(props: ShellProps) {
 
   useEffect(() => {
     if (selectedId == null || !shelfRef.current) return;
-    shelfRef.current
-      .querySelector<HTMLElement>(`[data-game-id="${selectedId}"]`)
-      ?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const capsule = shelfRef.current.querySelector<HTMLElement>(
+      `[data-game-id="${selectedId}"]`,
+    );
+    if (capsule) bringIntoView(capsule);
   }, [selectedId]);
 
   const hero =
