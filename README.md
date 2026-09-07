@@ -16,9 +16,6 @@ artwork and descriptions for games they can identify, not the games themselves.
 ROM hacks are a different thing and are supported. A patch contains only the
 hack author's own changes; the base ROM comes from you.
 
-There's also a browse-and-install flow, but it's limited to homebrew: games
-written by hobbyists and published freely by their authors. See below.
-
 ## What it does
 
 ### Scanning
@@ -170,34 +167,6 @@ Patches can also be imported in bulk, either from a folder or straight from a
 escape the destination are refused. Each patch is indexed by the CRC32 of the
 ROM it targets, so a game's detail panel can list exactly which catalogued hacks
 its dump will run.
-
-### Homebrew browser
-
-Search the Internet Archive from inside the app and pull a game into your
-library. It arrives downloaded, hashed, given a platform, and decorated with the
-screenshot and description from its archive page.
-
-The search is limited to an allowlist of two collections (`spahomebrew`,
-`doshaven-homebrew`, roughly 294 items). That's small on purpose. The Internet
-Archive also hosts emulated commercial libraries such as Console Living Room
-and the MS-DOS software library, which are unreachable from here by design, and
-several collections named "homebrew" turned out not to be:
-
-| Collection | Items | Why it was rejected |
-|---|---|---|
-| `psp-homebrew-library` | 3,950 | Fan ports of commercial games, plus Sony's PSP BIOS |
-| `the-homebrew-cloud` | 119 | Switch custom firmware and piracy tooling |
-| `atari_7800_homebrew` | 275 | Almost entirely "(Hack)" entries, derivative works on commercial ROMs |
-| `ps2-homebrew-library` | 238 | Loaders and cheat devices, not games |
-| `psx-homebrew-library` | 512 | Genuine Net Yaroze homebrew mixed with a BIOS dumper |
-
-Of everything checked, only `spahomebrew` carries licence metadata (118 of 188
-items are CC-licensed), and each result shows its licence where it declares one.
-Even inside the allowlist, homebrew scenes produce fan remakes that borrow
-commercial names, so treat the licence column as the signal.
-
-**Adding a collection to that allowlist is a licensing decision, not a
-convenience one.**
 
 ### Launching
 
@@ -451,7 +420,6 @@ src-tauri/src/
     thegamesdb.rs
   patch.rs        IPS/UPS/BPS patching with CRC verification
   hacks.rs        patch catalog import (folders and 7z bundles)
-  homebrew.rs     Internet Archive homebrew search and install
   detect.rs       finding an installed RetroArch
   cheats.rs       Game Genie codes and RetroArch's cheat format
   saves.rs        save files and save states
@@ -484,11 +452,6 @@ you.
   dumps, renames and duplicates.
 - **M3U grouping.** Collapse multi-disc games into one entry.
 - **Save state and screenshot browsing** per game.
-- **More homebrew sources.** The allowlist is small because most Internet
-  Archive "homebrew" collections didn't survive inspection. Scene sites that
-  publish their own catalogues would widen it honestly. itch.io isn't viable:
-  its API is built for OAuth and purchase verification, with no public browse
-  endpoint.
 
 ## Notes
 

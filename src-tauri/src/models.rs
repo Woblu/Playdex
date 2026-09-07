@@ -170,36 +170,6 @@ pub struct ImportProgress {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
-pub struct HomebrewItem {
-    pub identifier: String,
-    pub title: String,
-    pub creator: Option<String>,
-    pub description: Option<String>,
-    pub year: Option<String>,
-    /// Licence URL the uploader declared, when there is one.
-    pub license: Option<String>,
-    pub collection: String,
-    /// Best guess at the system, from the title tag or the collection.
-    pub platform: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HomebrewFile {
-    pub name: String,
-    pub size: i64,
-    pub url: String,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
-pub struct HomebrewDetail {
-    pub files: Vec<HomebrewFile>,
-    pub image_url: Option<String>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(rename_all = "camelCase")]
 pub struct Cheat {
     /// Position in the source cheat file, used as its stable identity.
     pub index: i64,

@@ -15,7 +15,6 @@ import type {
 
 import GameDetail from "./components/GameDetail";
 import SettingsModal from "./components/SettingsModal";
-import HomebrewModal from "./components/HomebrewModal";
 import StatsModal from "./components/StatsModal";
 import ProgressToast from "./components/ProgressToast";
 import UpdateBanner from "./components/UpdateBanner";
@@ -51,7 +50,6 @@ export default function App() {
 
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(false);
-  const [homebrewOpen, setHomebrewOpen] = useState(false);
   const [statsOpen, setStatsOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -316,14 +314,14 @@ export default function App() {
 
   // ------------------------------------------------------------ controller
 
-  const anyModalOpen = settingsOpen || homebrewOpen || statsOpen || detailOpen;
+  const anyModalOpen = settingsOpen || statsOpen || detailOpen;
 
   useEffect(() => {
     document.body.classList.toggle("pad-active", padConnected);
   }, [padConnected]);
 
   // The skin is announced on <body> so the shared panels - settings, stats,
-  // homebrew, a game's own page - can dress themselves to match. A desktop
+  // a game's own page - can dress themselves to match. A desktop
   // dialog dropped into a console screen undoes the whole illusion, and these
   // are the same components either way; only their presentation changes.
   useEffect(() => {
@@ -343,12 +341,11 @@ export default function App() {
   }, [padConnected, skin, games, selectedId, anyModalOpen]);
 
   const closeTopmost = useCallback(() => {
-    if (homebrewOpen) return setHomebrewOpen(false);
     if (statsOpen) return setStatsOpen(false);
     if (settingsOpen) return setSettingsOpen(false);
     if (detailOpen) return setDetailOpen(false);
     if (skin === "launchbox" && selectedId !== null) return setSelectedId(null);
-  }, [homebrewOpen, statsOpen, settingsOpen, detailOpen, skin, selectedId]);
+  }, [statsOpen, settingsOpen, detailOpen, skin, selectedId]);
 
   // Shoulder buttons page through systems, which is the one move that is
   // tedious with a stick and instant with a bumper.
@@ -455,7 +452,6 @@ export default function App() {
     onScan: handleScan,
     onScrape: handleScrape,
     onOpenSettings: () => setSettingsOpen(true),
-    onOpenHomebrew: () => setHomebrewOpen(true),
     onOpenStats: () => setStatsOpen(true),
   };
 
@@ -514,16 +510,6 @@ export default function App() {
           onPick={(id) => {
             setStatsOpen(false);
             setSelectedId(id);
-          }}
-        />
-      )}
-
-      {homebrewOpen && (
-        <HomebrewModal
-          onClose={() => setHomebrewOpen(false)}
-          onInstalled={() => {
-            void refreshGames();
-            void refreshSidebar();
           }}
         />
       )}

@@ -133,28 +133,6 @@ export interface ImportProgress {
   done: boolean;
 }
 
-export interface HomebrewItem {
-  identifier: string;
-  title: string;
-  creator: string | null;
-  description: string | null;
-  year: string | null;
-  license: string | null;
-  collection: string;
-  platform: string | null;
-}
-
-export interface HomebrewFile {
-  name: string;
-  size: number;
-  url: string;
-}
-
-export interface HomebrewDetail {
-  files: HomebrewFile[];
-  imageUrl: string | null;
-}
-
 export interface DetectedEmulator {
   path: string;
   coresDir: string | null;

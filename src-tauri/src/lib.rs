@@ -4,7 +4,6 @@ mod db;
 mod detect;
 mod error;
 mod hacks;
-mod homebrew;
 mod hashing;
 mod launch;
 mod media;
@@ -173,10 +172,6 @@ pub fn run() {
             commands::list_patches,
             commands::patch_catalog_size,
             commands::clear_patch_catalog,
-            commands::search_homebrew,
-            commands::homebrew_collections,
-            commands::homebrew_files,
-            commands::install_homebrew,
             commands::find_cheats,
             commands::list_cheats,
             commands::set_cheat,

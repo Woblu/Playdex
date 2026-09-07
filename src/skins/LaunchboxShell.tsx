@@ -34,7 +34,6 @@ export default function LaunchboxShell(props: ShellProps) {
     onScan,
     onScrape,
     onOpenSettings,
-    onOpenHomebrew,
     onOpenStats,
   } = props;
 
@@ -50,7 +49,6 @@ export default function LaunchboxShell(props: ShellProps) {
         onToggleFavorites={onToggleFavorites}
         onToggleUnscraped={onToggleUnscraped}
         onOpenSettings={onOpenSettings}
-        onOpenHomebrew={onOpenHomebrew}
         onOpenStats={onOpenStats}
       />
 

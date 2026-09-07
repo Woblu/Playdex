@@ -38,7 +38,6 @@ export default function SwitchShell(props: ShellProps) {
     onToggleFavorite,
     onOpenDetail,
     onOpenSettings,
-    onOpenHomebrew,
     onOpenStats,
     onScan,
   } = props;
@@ -211,9 +210,6 @@ export default function SwitchShell(props: ShellProps) {
           >
             <IconGrid />
           </TrayButton>
-          <TrayButton label="Homebrew" onClick={onOpenHomebrew}>
-            <IconDownload />
-          </TrayButton>
           <TrayButton label="Play history" onClick={onOpenStats}>
             <IconChart />
           </TrayButton>
@@ -383,15 +379,6 @@ function IconGrid() {
       <rect x="13.5" y="4" width="6.5" height="6.5" rx="1.4" />
       <rect x="4" y="13.5" width="6.5" height="6.5" rx="1.4" />
       <rect x="13.5" y="13.5" width="6.5" height="6.5" rx="1.4" />
-    </svg>
-  );
-}
-function IconDownload() {
-  return (
-    <svg viewBox="0 0 24 24" width="20" height="20" {...stroke}>
-      <path d="M12 4v10" />
-      <path d="M8 10.5l4 4 4-4" />
-      <path d="M4.5 18.5h15" />
     </svg>
   );
 }

@@ -1,7 +1,7 @@
 /* ==========================================================================
    Shared panels, dressed for whichever skin is running.
 
-   Settings, play history, the homebrew browser and a game's own page are one
+   Settings, play history and a game's own page are one
    set of components. Only their presentation changes here, so no feature ends
    up living in one skin and missing from another.
 

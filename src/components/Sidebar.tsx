@@ -13,7 +13,6 @@ interface Props {
   onToggleFavorites: () => void;
   onToggleUnscraped: () => void;
   onOpenSettings: () => void;
-  onOpenHomebrew: () => void;
   onOpenStats: () => void;
 }
 
@@ -27,7 +26,6 @@ export default function Sidebar({
   onToggleFavorites,
   onToggleUnscraped,
   onOpenSettings,
-  onOpenHomebrew,
   onOpenStats,
 }: Props) {
   const allActive = selected === null && !favoritesOnly && !unscrapedOnly;
@@ -113,9 +111,6 @@ export default function Sidebar({
       <div className="sidebar-footer">
         <button className="btn ghost" onClick={onOpenStats}>
           Your library
-        </button>
-        <button className="btn ghost" onClick={onOpenHomebrew}>
-          Browse homebrew
         </button>
         <button className="btn ghost" onClick={onOpenSettings}>
           Settings

@@ -72,6 +72,5 @@ export interface ShellProps {
   onScan: () => void;
   onScrape: () => void;
   onOpenSettings: () => void;
-  onOpenHomebrew: () => void;
   onOpenStats: () => void;
 }

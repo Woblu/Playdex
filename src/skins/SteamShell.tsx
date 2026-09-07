@@ -33,7 +33,6 @@ export default function SteamShell(props: ShellProps) {
     onLaunch,
     onOpenDetail,
     onOpenSettings,
-    onOpenHomebrew,
     onOpenStats,
     onScan,
   } = props;
@@ -94,9 +93,6 @@ export default function SteamShell(props: ShellProps) {
         <div className="st-rail-foot">
           <button className="st-rail-btn" onClick={onScan} data-nav>
             Scan
-          </button>
-          <button className="st-rail-btn" onClick={onOpenHomebrew} data-nav>
-            Homebrew
           </button>
           <button className="st-rail-btn" onClick={onOpenStats} data-nav>
             Stats

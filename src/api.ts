@@ -13,9 +13,6 @@ import type {
   ScanProgress,
   DetectedEmulator,
   HackBundle,
-  HomebrewDetail,
-  HomebrewFile,
-  HomebrewItem,
   PatchEntry,
   PlatformInfo,
   RetroArchCheats,
@@ -121,25 +118,6 @@ export const listPatches = (search: string | null) =>
 export const patchCatalogSize = () => invoke<number>("patch_catalog_size");
 
 export const clearPatchCatalog = () => invoke<void>("clear_patch_catalog");
-
-// ------------------------------------------------------------ homebrew
-
-export const searchHomebrew = (query: string, page: number) =>
-  invoke<HomebrewItem[]>("search_homebrew", { query, page });
-
-export const homebrewCollections = () =>
-  invoke<string[]>("homebrew_collections");
-
-export const homebrewFiles = (identifier: string) =>
-  invoke<HomebrewDetail>("homebrew_files", { identifier });
-
-export const installHomebrew = (
-  item: HomebrewItem,
-  file: HomebrewFile,
-  imageUrl: string | null,
-) => invoke<number>("install_homebrew", { item, file, imageUrl });
-
-// -------------------------------------------------------------- cheats
 
 export const findCheats = (gameId: number) =>
   invoke<Cheat[]>("find_cheats", { gameId });
