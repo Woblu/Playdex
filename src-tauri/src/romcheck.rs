@@ -28,6 +28,19 @@ pub enum Verdict {
 /// Nothing smaller than this has ever been a game.
 const MIN_ROM_BYTES: u64 = 1024;
 
+/// Playlists: a few lines of text naming the files that make up a disc.
+///
+/// These are exempt from the size floor, and from being judged on their
+/// contents at all. A cue sheet is a couple of hundred bytes and is not the
+/// game - it is the thing that says where the game is, and it is what an
+/// emulator wants handed to it. Rejecting one for being small threw away the
+/// only usable file in the folder and left its tracks behind.
+pub const PLAYLIST_EXTS: &[&str] = &["cue", "gdi", "m3u", "ccd", "toc"];
+
+pub fn is_playlist(ext: &str) -> bool {
+    PLAYLIST_EXTS.contains(&ext)
+}
+
 /// Magic numbers for things that are definitely not ROMs. Zip and 7z are
 /// absent on purpose — those are handled as archives elsewhere.
 const NOT_ROM_MAGIC: &[(&[u8], &str)] = &[
@@ -130,6 +143,21 @@ pub fn inspect(path: &Path, platform: &str) -> Verdict {
         return Verdict::NotRom("unreadable".into());
     };
 
+    let ext = path
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    // A playlist is meant to be tiny, and is the file that matters.
+    if is_playlist(&ext) {
+        return if meta.len() == 0 {
+            Verdict::NotRom("an empty playlist".into())
+        } else {
+            Verdict::Rom
+        };
+    }
+
     if meta.len() < MIN_ROM_BYTES {
         return Verdict::NotRom(format!("only {} bytes", meta.len()));
     }
@@ -155,12 +183,6 @@ pub fn inspect(path: &Path, platform: &str) -> Verdict {
             return Verdict::NotRom(format!("{description}"));
         }
     }
-
-    let ext = path
-        .extension()
-        .and_then(|e| e.to_str())
-        .unwrap_or("")
-        .to_ascii_lowercase();
 
     // Archives are judged by what is inside them.
     if platforms::ARCHIVE_EXTS.contains(&ext.as_str()) {

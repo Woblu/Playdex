@@ -130,6 +130,18 @@ pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) 
         if let Some(found) = signature::identify(path) {
             return found.to_string();
         }
+        // A playlist is a few lines of text and says nothing about itself, but
+        // the tracks it names are the disc. Saturn, Dreamcast and Mega CD all
+        // write their system into the start of the data track.
+        if romcheck::is_playlist(&ext) {
+            if let Some(dir) = path.parent() {
+                for track in referenced_tracks(path).iter().take(4) {
+                    if let Some(found) = signature::identify(&dir.join(track)) {
+                        return found.to_string();
+                    }
+                }
+            }
+        }
     }
 
     // 4. Directory names between the library root and the file, nearest first.
@@ -336,6 +348,86 @@ pub fn index_file(
     }
 }
 
+/// Files a disc is actually made of, which a playlist speaks for.
+const TRACK_EXTS: &[&str] = &["bin", "raw", "img", "wav", "iso", "mdf", "sub", "ccd"];
+
+/// The file names a playlist points at.
+///
+/// A `.cue` names its tracks in `FILE "..." BINARY` lines, a `.gdi` lists them
+/// as bare tokens, an `.m3u` is one path per line. Rather than write three
+/// parsers, this pulls out anything that looks like a filename with a track
+/// extension, which is all any of them contain that we care about.
+fn referenced_tracks(path: &Path) -> Vec<String> {
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    for raw in text.split(|c: char| c == '"' || c.is_whitespace()) {
+        let token = raw.trim().trim_matches('\'');
+        let ext = Path::new(token)
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if TRACK_EXTS.contains(&ext.as_str()) {
+            if let Some(leaf) = Path::new(token).file_name().and_then(|n| n.to_str()) {
+                out.push(leaf.to_ascii_lowercase());
+            }
+        }
+    }
+    out
+}
+
+/// Drop the pieces of a disc that a playlist in the same folder speaks for.
+///
+/// A PS1 game kept unzipped is a cue sheet and three or four `.bin` tracks. All
+/// of them look like candidates, so the library filled up with "Track 1",
+/// "Track 2" and "Track 3" as separate games, none of which an emulator can
+/// open on its own. The cue is the game; the tracks belong to it.
+///
+/// Names referenced by the playlist go first. Any remaining track-shaped file
+/// sharing a folder with a playlist goes too, because dumps get renamed and a
+/// cue that no longer matches its tracks is common - and a stray `.bin` beside
+/// a cue sheet was never a second game.
+fn drop_disc_tracks(candidates: &mut Vec<(PathBuf, PathBuf, Option<String>)>) {
+    use std::collections::{HashMap, HashSet};
+
+    let mut playlists: HashMap<PathBuf, HashSet<String>> = HashMap::new();
+    for (path, _, _) in candidates.iter() {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if !romcheck::is_playlist(&ext) {
+            continue;
+        }
+        let Some(dir) = path.parent() else { continue };
+        playlists
+            .entry(dir.to_path_buf())
+            .or_default()
+            .extend(referenced_tracks(path));
+    }
+
+    if playlists.is_empty() {
+        return;
+    }
+
+    candidates.retain(|(path, _, _)| {
+        let ext = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if romcheck::is_playlist(&ext) || !TRACK_EXTS.contains(&ext.as_str()) {
+            return true;
+        }
+        let Some(dir) = path.parent() else { return true };
+        // A track only loses to a playlist standing beside it.
+        playlists.get(dir).is_none()
+    });
+}
+
 /// What came of dropping things onto the window.
 #[derive(Default, serde::Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -508,6 +600,10 @@ pub fn scan_all(
             ));
         }
     }
+
+    // A disc kept unzipped is a playlist plus its tracks. Index the playlist,
+    // not the pieces.
+    drop_disc_tracks(&mut candidates);
 
     // Pass 2 — check, hash and record.
     let total = candidates.len();
@@ -685,6 +781,102 @@ mod tests {
         let _ = std::fs::remove_dir_all(&dir);
     }
 
+    fn scratch(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "playdex-{}-{}-{:?}",
+            tag,
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    fn put(path: &Path, bytes: &[u8]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    /// A disc kept unzipped is a playlist and its tracks. That is one game.
+    #[test]
+    fn a_disc_folder_is_one_game_not_four() {
+        let root = scratch("discfolder");
+        let game = root.join("Final Fantasy VII");
+        let big = vec![0u8; 60_000];
+
+        put(
+            &game.join("Final Fantasy VII.cue"),
+            b"FILE \"Final Fantasy VII (Track 1).bin\" BINARY
+  TRACK 01 MODE2/2352
+",
+        );
+        for n in 1..=3 {
+            put(&game.join(format!("Final Fantasy VII (Track {n}).bin")), &big);
+        }
+
+        let mut candidates: Vec<(PathBuf, PathBuf, Option<String>)> = std::fs::read_dir(&game)
+            .unwrap()
+            .flatten()
+            .map(|e| (e.path(), root.clone(), None))
+            .collect();
+        assert_eq!(candidates.len(), 4);
+
+        drop_disc_tracks(&mut candidates);
+
+        assert_eq!(candidates.len(), 1, "the cue speaks for its tracks");
+        assert_eq!(
+            candidates[0].0.extension().unwrap(),
+            "cue",
+            "and the cue is what survives, since it is what an emulator opens"
+        );
+
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A cue sheet is a couple of hundred bytes. The size floor used to throw
+    /// it out and keep its tracks, which is exactly backwards.
+    #[test]
+    fn a_playlist_is_not_too_small_to_be_a_game() {
+        let root = scratch("playlist");
+        let cue = root.join("Some Game.cue");
+        put(&cue, b"FILE \"Some Game.bin\" BINARY
+");
+        assert!(std::fs::metadata(&cue).unwrap().len() < 100);
+        assert_eq!(romcheck::inspect(&cue, "ps1"), romcheck::Verdict::Rom);
+
+        // Empty is still nothing.
+        let empty = root.join("Empty.cue");
+        put(&empty, b"");
+        assert!(matches!(
+            romcheck::inspect(&empty, "ps1"),
+            romcheck::Verdict::NotRom(_)
+        ));
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A playlist says nothing about itself, so the system comes from the
+    /// track it points at.
+    #[test]
+    fn a_playlist_takes_its_system_from_its_track() {
+        let root = scratch("gditrack");
+        let game = root.join("Sonic Adventure");
+
+        // A Dreamcast data track names the console at 0x10.
+        let mut track = vec![0u8; 0x300];
+        track[0x10..0x10 + 15].copy_from_slice(b"SEGA SEGAKATANA");
+        put(&game.join("track03.bin"), &track);
+
+        let cue = game.join("Sonic Adventure.cue");
+        put(&cue, b"FILE \"track03.bin\" BINARY
+");
+
+        assert_eq!(detect_platform(&cue, &root, None), "dreamcast");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
     #[test]
     fn folder_assignment_beats_everything() {
         let root = Path::new("C:/roms");
@@ -777,5 +969,6 @@ mod tests {
         assert_eq!(detect_platform(p, root, None), "wii");
     }
 }
+
 
 

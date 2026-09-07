@@ -56,6 +56,25 @@ rejection rules, same hashing, same cleaned-up title, and the same automatic
 metadata fetch afterwards. A second "quick add" path would be a second place
 for those rules to drift.
 
+### Discs kept as folders
+
+A disc game that has not been zipped is usually a folder holding a playlist and
+its tracks: `Final Fantasy VII.cue` beside three or four `.bin` files. That is
+one game, and the cue is the part an emulator wants, so that is the part
+Playdex indexes. Tracks named by a playlist in the same folder are skipped, as
+is any leftover track-shaped file sitting beside one, since dumps get renamed
+and a stray `.bin` next to a cue sheet was never a second game.
+
+Playlists are also exempt from the size floor. A cue sheet is a couple of
+hundred bytes, and rejecting it for being small threw away the only usable file
+in the folder while keeping the tracks it spoke for.
+
+A playlist says nothing about itself, so its system comes from the track it
+points at: Saturn, Dreamcast and Mega CD all write their name into the start of
+the data track. Where that fails - a PlayStation disc, say - the folder's
+assigned system in **Settings → ROM folders** settles it for everything
+underneath.
+
 ### Telling ROMs from everything else
 
 ROM folders fill up with manuals, box scans, BIOS dumps and installers, and
