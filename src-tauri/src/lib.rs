@@ -1,5 +1,6 @@
 mod cheats;
 mod commands;
+mod dats;
 mod db;
 mod detect;
 mod error;
@@ -133,6 +134,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             app_paths,
             commands::add_dropped,
+            commands::import_dat,
+            commands::dat_status,
+            commands::clear_dats,
+            commands::verify_game,
             commands::cache_usage,
             commands::clear_cache,
             commands::unpack_in_place,

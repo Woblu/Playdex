@@ -204,3 +204,22 @@ export interface DropTally {
   lastId: number | null;
   reasons: string[];
 }
+
+/** What a DAT catalogue says about one dump. */
+export type DatVerdict =
+  | { verified: { name: string; datName: string } }
+  | "notInDatabase"
+  | "noDats"
+  | "notHashed";
+
+export interface DatImportSummary {
+  datName: string;
+  added: number;
+  duplicates: number;
+}
+
+export interface DatStatus {
+  total: number;
+  loaded: Array<[string, number]>;
+  library: Record<string, number>;
+}

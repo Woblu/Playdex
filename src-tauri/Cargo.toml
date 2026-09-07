@@ -1,6 +1,6 @@
 [package]
 name = "playdex"
-version = "0.6.1"
+version = "0.7.0"
 description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
@@ -39,4 +39,5 @@ sevenz-rust2 = "0.22.2"
 futures-util = "0.3.34"
 tauri-plugin-updater = "2.11.0"
 tauri-plugin-process = "2.3.1"
+quick-xml = "0.42.0"
 

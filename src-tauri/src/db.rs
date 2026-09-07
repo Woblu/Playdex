@@ -97,6 +97,33 @@ CREATE TABLE IF NOT EXISTS cheats (
     UNIQUE(game_id, idx)
 );
 
+-- Known-good dumps from No-Intro and Redump DATs. Keyed by checksum so
+-- importing the same DAT twice catalogues nothing new.
+CREATE TABLE IF NOT EXISTS dat_roms (
+    id       INTEGER PRIMARY KEY,
+    dat_name TEXT    NOT NULL,
+    name     TEXT    NOT NULL,
+    size     INTEGER NOT NULL DEFAULT 0,
+    crc32    TEXT,
+    md5      TEXT,
+    sha1     TEXT
+);
+
+-- Not a plain UNIQUE(...) on the columns: SQLite treats NULLs as distinct in a
+-- unique constraint, so a DAT entry with no MD5 would be inserted afresh on
+-- every import. Folding NULL to an empty string makes "the same dump" mean the
+-- same thing every time.
+CREATE UNIQUE INDEX IF NOT EXISTS dat_roms_identity ON dat_roms(
+    name,
+    COALESCE(crc32, ''),
+    COALESCE(md5, ''),
+    COALESCE(sha1, '')
+);
+
+CREATE INDEX IF NOT EXISTS dat_roms_sha1 ON dat_roms(sha1);
+CREATE INDEX IF NOT EXISTS dat_roms_md5  ON dat_roms(md5);
+CREATE INDEX IF NOT EXISTS dat_roms_crc  ON dat_roms(crc32);
+
 CREATE TABLE IF NOT EXISTS play_sessions (
     id         INTEGER PRIMARY KEY,
     game_id    INTEGER NOT NULL REFERENCES games(id) ON DELETE CASCADE,

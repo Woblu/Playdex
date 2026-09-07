@@ -12,6 +12,7 @@ import type {
   RetroArchCheats,
 } from "../types";
 import SystemIcon from "./SystemIcon";
+import type { DatVerdict } from "../types";
 
 interface Props {
   game: Game;
@@ -40,6 +41,7 @@ export default function GameDetail({
   const [confirmUnpack, setConfirmUnpack] = useState(false);
   const [unpacking, setUnpacking] = useState(false);
   const [unpackNote, setUnpackNote] = useState<string | null>(null);
+  const [verdict, setVerdict] = useState<DatVerdict | null>(null);
 
   // Windows paths use backslashes, so both separators have to split.
   const fileName = game.path.split(/[\\/]/).pop() ?? game.path;
@@ -237,6 +239,8 @@ export default function GameDetail({
     setCheatNote(null);
     setCheatError(null);
     setCheatQuery("");
+    setVerdict(null);
+    api.verifyGame(game.id).then(setVerdict).catch(() => setVerdict(null));
     api.listCheats(game.id).then(setCheats).catch(() => setCheats([]));
     api.retroarchCheatStatus().then(setRaCheats).catch(() => setRaCheats(null));
     setSaveNote(null);
@@ -337,6 +341,37 @@ export default function GameDetail({
 
         <div className="section-title">File</div>
         <div className="path-box">{game.path}</div>
+
+        {verdict && verdict !== "noDats" && (
+          <div className={`dat-verdict ${verdictClass(verdict)}`}>
+            {typeof verdict === "object" ? (
+              <>
+                <strong>Verified good dump</strong>
+                <div className="hint">
+                  Matches {verdict.verified.name} in {verdict.verified.datName}.
+                </div>
+              </>
+            ) : verdict === "notInDatabase" ? (
+              <>
+                <strong>Not in the database</strong>
+                <div className="hint">
+                  No catalogued dump has these checksums. It may be a bad dump,
+                  a modified ROM, or simply a release the DATs you have loaded
+                  do not cover.
+                </div>
+              </>
+            ) : (
+              <>
+                <strong>Too large to have been checked</strong>
+                <div className="hint">
+                  Files past the hashing limit are indexed without checksums,
+                  so there is nothing to compare. Raise the limit in Settings
+                  and rescan to check this one.
+                </div>
+              </>
+            )}
+          </div>
+        )}
 
         {isArchived && (
           <div className="unpack-box">
@@ -734,4 +769,10 @@ export default function GameDetail({
       </div>
     </aside>
   );
+}
+
+/** Colour the verdict by how much it should worry you. */
+function verdictClass(v: DatVerdict): string {
+  if (typeof v === "object") return "good";
+  return v === "notInDatabase" ? "warn" : "quiet";
 }

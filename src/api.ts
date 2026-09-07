@@ -9,6 +9,9 @@ import type {
   LibraryStats,
   Cheat,
   CacheUsage,
+  DatImportSummary,
+  DatStatus,
+  DatVerdict,
   DropTally,
   ScanProgress,
   DetectedEmulator,
@@ -242,3 +245,13 @@ export const addDropped = (paths: string[]) =>
 
 export const unpackInPlace = (id: number) =>
   invoke<string>("unpack_in_place", { id });
+
+// ------------------------------------------------------------------ DATs
+
+export const importDat = (path: string) =>
+  invoke<DatImportSummary>("import_dat", { path });
+
+export const datStatus = () => invoke<DatStatus>("dat_status");
+export const clearDats = () => invoke<void>("clear_dats");
+export const verifyGame = (id: number) =>
+  invoke<DatVerdict>("verify_game", { id });

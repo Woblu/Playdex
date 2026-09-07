@@ -174,6 +174,31 @@ is left alone since you may have set it by hand.
 Artwork downloads once into the app data directory and is served to the UI over
 a private `media://` protocol scoped to that directory.
 
+### Verifying dumps
+
+A DAT is a catalogue: for every known-good dump of a system, its exact size and
+checksums. Import one under **Settings → Verification** and every game's panel
+says whether its checksums match a catalogued dump, whether nothing in the
+catalogue has them, or whether it was too large to have been hashed at all.
+
+This is what all the hashing was for. Playdex already computes CRC32, MD5 and
+SHA-1 for everything in one pass, and hashes the ROM *inside* an archive rather
+than the archive, which is exactly what a DAT indexes — so checking is close to
+a database join.
+
+SHA-1 is tried first, then MD5, then CRC32. CRC32 comes last because it is
+short enough that a collision is conceivable, and a DAT is meant to settle
+arguments rather than start them.
+
+The DATs are not shipped or fetched. No-Intro (cartridges) and Redump (discs)
+publish through a click-through page with no API, so the files come from you.
+That is also why both work equally well here, where a mirror would have covered
+one and not the other.
+
+"Not in the catalogue" is not the same as "bad". It means no DAT you have
+loaded lists those checksums, which covers bad dumps and modified ROMs, but
+also any system you simply have not imported a DAT for.
+
 ### ROM hacks
 
 Point Playdex at an IPS, UPS or BPS patch and it patches a *copy* of a ROM in
@@ -447,6 +472,7 @@ src-tauri/src/
   hashing.rs      one-pass CRC32/MD5/SHA1, reads into zip and 7z
   platforms.rs    system table: extensions, aliases, preferred cores
   romcheck.rs     telling ROMs from manuals, BIOS dumps and box art
+  dats.rs         No-Intro / Redump catalogues and dump verification
   signature.rs    identifying a system from magic numbers in the header
   scrape/
     mod.rs        provider orchestration and fallback
@@ -483,8 +509,6 @@ you.
 
 ## Ideas
 
-- **DAT matching.** Verify dumps against No-Intro/Redump DATs and flag bad
-  dumps, renames and duplicates.
 - **M3U grouping.** Collapse multi-disc games into one entry.
 - **Save state and screenshot browsing** per game.
 

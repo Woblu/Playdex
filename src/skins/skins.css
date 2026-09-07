@@ -825,3 +825,18 @@ body.skin-steam {
   border-radius: var(--r-md);
   background: var(--surface-2);
 }
+
+/* What a DAT catalogue says about a dump. Coloured by how much it should
+   concern you: green confirms, amber is worth a look, grey is only the
+   absence of an answer. */
+.dat-verdict {
+  margin-top: 10px;
+  padding: 10px 13px;
+  border-radius: var(--r-md);
+  border: 1px solid var(--border);
+  border-left-width: 3px;
+  background: var(--surface-2);
+}
+.dat-verdict.good { border-left-color: var(--good); }
+.dat-verdict.warn { border-left-color: var(--warn); }
+.dat-verdict.quiet { border-left-color: var(--border-strong); }

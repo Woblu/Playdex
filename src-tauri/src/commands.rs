@@ -776,6 +776,56 @@ pub async fn add_dropped(app: AppHandle, paths: Vec<String>) -> Result<scan::Dro
     Ok(tally)
 }
 
+// --------------------------------------------------------------- DATs
+
+/// Import a No-Intro or Redump DAT so dumps can be checked against it.
+#[tauri::command]
+pub fn import_dat(db: State<Db>, path: String) -> Result<crate::dats::ImportSummary> {
+    let (name, roms) = crate::dats::parse(std::path::Path::new(&path))?;
+    let conn = db.0.lock().unwrap();
+    crate::dats::store(&conn, &name, &roms)
+}
+
+#[derive(serde::Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DatStatus {
+    pub total: i64,
+    /// Each loaded DAT and how many dumps it brought.
+    pub loaded: Vec<(String, i64)>,
+    /// How the library scores against them, by verdict.
+    pub library: std::collections::HashMap<String, usize>,
+}
+
+#[tauri::command]
+pub fn dat_status(db: State<Db>) -> Result<DatStatus> {
+    let conn = db.0.lock().unwrap();
+    Ok(DatStatus {
+        total: crate::dats::count(&conn)?,
+        loaded: crate::dats::loaded(&conn)?,
+        library: crate::dats::verify_library(&conn)?,
+    })
+}
+
+#[tauri::command]
+pub fn clear_dats(db: State<Db>) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    crate::dats::clear(&conn)
+}
+
+/// What the catalogue says about one game.
+#[tauri::command]
+pub fn verify_game(db: State<Db>, id: i64) -> Result<crate::dats::Verdict> {
+    let conn = db.0.lock().unwrap();
+    let game = db::get_game(&conn, id)?
+        .ok_or_else(|| AppError::Other("Game not found".into()))?;
+    crate::dats::verify(
+        &conn,
+        game.crc32.as_deref(),
+        game.md5.as_deref(),
+        game.sha1.as_deref(),
+    )
+}
+
 // ------------------------------------------------------ unpacked cache
 
 #[derive(serde::Serialize)]
