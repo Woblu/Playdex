@@ -10,6 +10,7 @@ use crate::error::Result;
 use crate::hashing;
 use crate::models::ScanProgress;
 use crate::romcheck;
+use crate::signature;
 use crate::platforms;
 
 /// Strip the extension and the usual No-Intro / TOSEC bracket tags to get
@@ -118,7 +119,20 @@ pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) 
         }
     }
 
-    // 3. Directory names between the library root and the file, nearest first.
+    // 3. What the file says about itself. Only reached when the extension did
+    //    not settle it, which is exactly the ambiguous cases: .iso, .bin and
+    //    .chd belong to a dozen systems, and a disc image announces which one
+    //    in its first few hundred bytes. Bytes beat both the folder someone
+    //    filed it under and the name they gave it, so this comes first of the
+    //    guesses. Archives are skipped - reaching a header inside one means
+    //    decompressing it, and their inner extension already spoke at step 2.
+    if !platforms::ARCHIVE_EXTS.contains(&ext.as_str()) {
+        if let Some(found) = signature::identify(path) {
+            return found.to_string();
+        }
+    }
+
+    // 4. Directory names between the library root and the file, nearest first.
     let mut dirs: Vec<String> = Vec::new();
     let mut cur = path.parent();
     while let Some(d) = cur {
@@ -139,7 +153,7 @@ pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) 
         }
     }
 
-    // 4. The ROM's own name, and the names inside the archive. Dumps are
+    // 5. The ROM's own name, and the names inside the archive. Dumps are
     //    routinely called "Mario Kart Wii" or "Sonic (Mega Drive)", which is
     //    the last real evidence available for a container extension like .7z
     //    that belongs to no system at all. Matched on whole words only, so a
@@ -151,7 +165,7 @@ pub fn detect_platform(path: &Path, root: &Path, folder_override: Option<&str>) 
         }
     }
 
-    // 5. Extension shared by a few systems and nothing else to go on: take the
+    // 6. Extension shared by a few systems and nothing else to go on: take the
     //    first candidate rather than dropping the ROM entirely.
     if let Some(first) = candidates.first() {
         return first.slug.to_string();
@@ -702,6 +716,46 @@ mod tests {
         let root = Path::new("C:/roms");
         let p = Path::new("C:/roms/Retro Folders/New Super Mario Bros Wii [SMNE01].7z");
         assert_eq!(detect_platform(p, root, None), "wii");
+    }
+
+    /// An ambiguous extension that used to be guessed at from folder names
+    /// is now settled by the file's own header.
+    #[test]
+    fn bytes_beat_the_folder_and_the_filename() {
+        let dir = std::env::temp_dir().join(format!(
+            "playdex-sig-{}-{:?}",
+            std::process::id(),
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        ));
+        // A folder named after the wrong system, on purpose.
+        let wrong = dir.join("PlayStation");
+        std::fs::create_dir_all(&wrong).unwrap();
+
+        // A disc image with the Wii magic where a Wii disc keeps it.
+        let iso = wrong.join("Some Disc.iso");
+        let mut bytes = vec![0u8; 0x300];
+        bytes[0x18..0x1c].copy_from_slice(&[0x5D, 0x1C, 0x9E, 0xA3]);
+        std::fs::write(&iso, &bytes).unwrap();
+
+        assert_eq!(
+            detect_platform(&iso, &dir, None),
+            "wii",
+            "the header should win over a folder called PlayStation"
+        );
+
+        // The same file with nothing recognisable in it falls back to the
+        // folder name, which is the behaviour that used to be all there was.
+        let blank = wrong.join("Mystery.iso");
+        std::fs::write(&blank, vec![0u8; 0x300]).unwrap();
+        assert_eq!(detect_platform(&blank, &dir, None), "ps1");
+
+        // And a folder assignment still outranks everything.
+        assert_eq!(detect_platform(&iso, &dir, Some("gamecube")), "gamecube");
+
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     #[test]

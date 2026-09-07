@@ -90,10 +90,24 @@ extensions alone don't settle it. Playdex works through this order:
 1. The platform assigned to the library folder, if you set one
 2. An extension only one system uses (`.sfc`, `.gba`, `.nes`)
 3. For an archive, an unambiguous extension among its entries
-4. A directory name matching a system alias (`.../Sega Genesis/...`)
-5. The ROM's own filename, and the names inside the archive
-6. Failing all that, the first candidate system, which you can correct from the
+4. **The file's own bytes** — a magic number in its first kilobyte
+5. A directory name matching a system alias (`.../Sega Genesis/...`)
+6. The ROM's own filename, and the names inside the archive
+7. Failing all that, the first candidate system, which you can correct from the
    game's detail panel
+
+Step 4 is the only one that isn't a guess. Extensions and filenames are what
+somebody typed; a magic number is what the machine wrote. It exists for the
+ambiguous cases: a `.iso` could be six different systems, but a disc image
+announces which one it is in its header. A Wii dump carries `5D1C9EA3` at
+offset 0x18, or at 0x218 when a WBFS container wraps it; a GameCube disc has
+`C2339F3D` at 0x1C; a Switch NSP opens with `PFS0`; Saturn, Dreamcast and Mega
+CD each name themselves in plain text. Only the first kilobyte is read.
+
+Because it runs after the extension has had its say, a signature can only
+settle a file that was going to be guessed at anyway — it can never overrule a
+`.sfc`. Archives skip it, since reaching a header inside one means
+decompressing it and their inner extension has already spoken at step 3.
 
 Step 5 matters more than it sounds. Dumps are routinely named "Mario Kart Wii"
 or "Sonic (Mega Drive)", and for a container extension like `.7z` that belongs
@@ -419,6 +433,7 @@ src-tauri/src/
   hashing.rs      one-pass CRC32/MD5/SHA1, reads into zip and 7z
   platforms.rs    system table: extensions, aliases, preferred cores
   romcheck.rs     telling ROMs from manuals, BIOS dumps and box art
+  signature.rs    identifying a system from magic numbers in the header
   scrape/
     mod.rs        provider orchestration and fallback
     libretro.rs   artwork, no credentials needed

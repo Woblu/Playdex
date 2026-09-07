@@ -14,6 +14,7 @@ mod platforms;
 mod romcheck;
 mod saves;
 mod scan;
+mod signature;
 mod scrape;
 
 use std::path::PathBuf;
