@@ -263,7 +263,13 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
   const emulatorFor = (slug: string): EmulatorConfig =>
     emulators.find((e) => e.platform === slug) ?? {
       platform: slug,
-      mode: "retroarch",
+      // A system with no libretro core in existence starts on Standalone.
+      // Offering RetroArch as its default is offering something that cannot
+      // work, and leaves you to notice that yourself.
+      mode:
+        (known.find((k) => k.slug === slug)?.cores.length ?? 0) > 0
+          ? "retroarch"
+          : "custom",
       core: null,
       customCommand: null,
     };
@@ -443,10 +449,16 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
                 const cfg = emulatorFor(p.slug);
                 const defaultCore =
                   known.find((k) => k.slug === p.slug)?.cores[0] ?? "";
+                // Some systems have no libretro core in existence at all.
+                const noCore =
+                  (known.find((k) => k.slug === p.slug)?.cores.length ?? 0) === 0;
                 return (
                   <div className="field" key={p.slug}>
                     <label>
                       {p.name} · {p.gameCount} games
+                      {noCore && (
+                        <span className="tag-nocore">standalone only</span>
+                      )}
                     </label>
                     <div className="row">
                       <select
@@ -472,22 +484,43 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
                           }
                         />
                       ) : (
-                        <input
-                          value={cfg.customCommand ?? ""}
-                          placeholder={'"C:\\Emu\\dolphin.exe" -b -e "{rom}"'}
-                          onChange={(e) =>
-                            void updateEmulator({
-                              ...cfg,
-                              customCommand: e.target.value,
-                            })
-                          }
-                        />
+                        <>
+                          <input
+                            value={cfg.customCommand ?? ""}
+                            placeholder={'"C:\\Emu\\emulator.exe" "{rom}"'}
+                            onChange={(e) =>
+                              void updateEmulator({
+                                ...cfg,
+                                customCommand: e.target.value,
+                              })
+                            }
+                          />
+                          <button
+                            className="btn small"
+                            onClick={async () => {
+                              const exe = await api.pickFile();
+                              if (!exe) return;
+                              // Build the command instead of making someone
+                              // get the quoting and the {rom} placeholder
+                              // right by hand. Whatever else the emulator
+                              // wants can be typed in after.
+                              void updateEmulator({
+                                ...cfg,
+                                customCommand: `"${exe}" "{rom}"`,
+                              });
+                            }}
+                          >
+                            Browse
+                          </button>
+                        </>
                       )}
                     </div>
                     <div className="hint">
                       {cfg.mode === "retroarch"
                         ? `Core file name without extension. Default: ${defaultCore || "none known"}`
-                        : "Use {rom} where the ROM path should go."}
+                        : noCore
+                          ? "No libretro core exists for this system, so it needs a standalone emulator. Browse to its .exe and the command is filled in for you; {rom} is where the game's path goes."
+                          : "Browse to the emulator's .exe, or type the command yourself. {rom} is where the game's path goes."}
                     </div>
                   </div>
                 );

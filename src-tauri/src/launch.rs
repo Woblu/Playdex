@@ -388,9 +388,17 @@ pub fn launch(
     let (exe, args) = {
         let guard = conn.lock().unwrap();
 
-        // Unpack the ROM first if the emulator cannot read the archive it
-        // lives in. Asking the core what it accepts beats guessing: Dolphin
-        // takes a .wbfs but not the .7z holding it.
+        // Check the emulator is actually set up before unpacking anything.
+        // Unpacking a Switch game is several gigabytes, and discovering
+        // afterwards that the system has no emulator configured would have
+        // spent all of it to reach an error we could have raised first. The
+        // path handed in here is not the one that finally runs; this call is
+        // only asked whether a command can be built at all.
+        build_command(&guard, game, &game.path)?;
+
+        // Unpack the ROM if the emulator cannot read the archive it lives in.
+        // Asking the core what it accepts beats guessing: Dolphin takes a
+        // .wbfs but not the .7z holding it.
         let accepts = db::get_setting(&guard, "retroarch_path")?
             .map(|p| crate::detect::clean_path(&p))
             .filter(|p| !p.is_empty())
