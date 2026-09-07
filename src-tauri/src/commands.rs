@@ -905,14 +905,28 @@ pub struct CacheUsage {
 
 /// What the unpacked-ROM cache is costing right now.
 #[tauri::command]
-pub fn cache_usage(app: AppHandle) -> CacheUsage {
+pub fn cache_usage(app: AppHandle, db: State<Db>) -> CacheUsage {
     let root = app.state::<AppState>().media_root.clone();
     let (bytes, entries) = launch::cache_usage(&root);
+    let limit = {
+        let conn = db.0.lock().unwrap();
+        launch::cache_limit(&conn)
+    };
     CacheUsage {
         bytes,
         entries,
-        limit_bytes: launch::CACHE_LIMIT_BYTES,
+        limit_bytes: limit,
     }
+}
+
+/// Swap a game's archive for the unpacked ROM inside it, deleting the archive.
+#[tauri::command]
+pub fn unpack_in_place(app: AppHandle, db: State<Db>, id: i64) -> Result<String> {
+    let cache_root = app.state::<AppState>().media_root.clone();
+    let conn = db.0.lock().unwrap();
+    let game = db::get_game(&conn, id)?
+        .ok_or_else(|| AppError::Other("Game not found".into()))?;
+    launch::unpack_in_place(&conn, &game, &cache_root)
 }
 
 /// Empty it. Nothing on disk outside the cache is touched, and every entry is

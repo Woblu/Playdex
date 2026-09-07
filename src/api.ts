@@ -261,3 +261,6 @@ export const clearCache = () => invoke<number>("clear_cache");
 
 export const addDropped = (paths: string[]) =>
   invoke<DropTally>("add_dropped", { paths });
+
+export const unpackInPlace = (id: number) =>
+  invoke<string>("unpack_in_place", { id });

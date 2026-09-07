@@ -226,10 +226,20 @@ a RetroArch that cannot be found) the ROM is unpacked, since a real file always
 works.
 
 Unpacked ROMs are keyed by the archive's checksum and reused, so this costs one
-extraction rather than one per launch. The cache is capped at 12 GB and evicts
-the game you have not played in longest; **Settings → Emulators** shows what it
-is using and can empty it. The originals are never touched, and anything cleared
-is rebuilt on the next launch.
+extraction rather than one per launch. **Settings → Emulators** shows what the
+cache is using, sets its size limit (64 GB by default, since one disc game can
+be most of a small limit on its own) and can empty it. Past the limit the game
+you have not played in longest is dropped. The originals are never touched, and
+anything cleared is rebuilt on the next launch.
+
+Keeping both copies is the price of storing a disc game compressed, so a game's
+detail panel offers to collapse them: **Unpack and keep only the ROM** moves the
+unpacked file out of the cache into the folder the archive lived in, repoints
+the library entry, and then deletes the archive. That order is the design — the
+replacement is in place and checked before anything is removed, and moving it
+out of the cache puts it beyond the reach of eviction, which would otherwise be
+free to delete the only remaining copy. It is the one thing in Playdex that
+deletes a file of yours, and it only happens when asked for directly.
 
 ### Cheats
 
@@ -483,6 +493,8 @@ you.
 ## Notes
 
 - Removing a game removes the library entry only. The file on disk is never
-  touched. Nothing in this app deletes ROMs.
+  touched. The single exception is **Unpack and keep only the ROM**, which
+  deletes an archive after replacing it with the ROM from inside, and says so
+  before it does.
 - The library lives in the app data directory next to the artwork cache, so
   deleting that folder resets everything without touching your ROMs.

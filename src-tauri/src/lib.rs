@@ -136,6 +136,7 @@ pub fn run() {
             commands::add_dropped,
             commands::cache_usage,
             commands::clear_cache,
+            commands::unpack_in_place,
             commands::list_games,
             commands::get_game,
             commands::list_platforms,

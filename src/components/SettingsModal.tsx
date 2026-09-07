@@ -543,8 +543,8 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
                   </div>
                   {cache && (
                     <div className="hint">
-                      Kept under {formatBytes(cache.limitBytes)}; past that the
-                      game you have not played in longest is dropped.
+                      Past the limit, the game you have not played in longest
+                      is dropped.
                     </div>
                   )}
                 </div>
@@ -565,6 +565,23 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
                 >
                   {clearing ? "Clearing…" : "Clear"}
                 </button>
+              </div>
+              <div className="field" style={{ marginTop: 10 }}>
+                <label>Keep at most</label>
+                <div className="row">
+                  <input
+                    type="number"
+                    min={1}
+                    style={{ maxWidth: 120 }}
+                    value={settings.cache_limit_gb ?? "64"}
+                    onChange={(e) => setValue("cache_limit_gb", e.target.value)}
+                  />
+                  <span className="hint">GB</span>
+                </div>
+                <div className="hint">
+                  One disc game can be most of a small limit on its own, so
+                  this is generous by default. Press Save to apply.
+                </div>
               </div>
             </>
           )}

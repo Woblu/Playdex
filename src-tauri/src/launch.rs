@@ -188,10 +188,22 @@ pub fn preview_rom_path(game: &Game, cache_root: &Path, accepts: Option<&[String
         .to_string()
 }
 
-/// How much unpacked ROM to keep before throwing the oldest away. Disc images
-/// are gigabytes each, and this lives in the app data directory where nobody
-/// would think to look for it, so it does not get to grow without limit.
-pub const CACHE_LIMIT_BYTES: u64 = 12 * 1024 * 1024 * 1024;
+/// How much unpacked ROM to keep before throwing the oldest away, when nothing
+/// else has been chosen. One Switch or Wii U game can be most of this on its
+/// own, so the default is generous; the point of a limit is that a forgotten
+/// folder in AppData cannot swallow a disk, not that it should be tight.
+pub const DEFAULT_CACHE_LIMIT_BYTES: u64 = 64 * 1024 * 1024 * 1024;
+
+/// The limit in force, which is a setting.
+pub fn cache_limit(conn: &rusqlite::Connection) -> u64 {
+    db::get_setting(conn, "cache_limit_gb")
+        .ok()
+        .flatten()
+        .and_then(|v| v.trim().parse::<u64>().ok())
+        .filter(|gb| *gb > 0)
+        .map(|gb| gb * 1024 * 1024 * 1024)
+        .unwrap_or(DEFAULT_CACHE_LIMIT_BYTES)
+}
 
 /// Marks an entry as used just now. Ordinary file times move only when a file
 /// is written, so a game launched nightly for a year would still look as old
@@ -208,10 +220,98 @@ pub fn playable_path(game: &Game, cache_root: &Path, accepts: Option<&[String]>)
     let dir = cache_dir_for(game, cache_root);
     let file = crate::hashing::extract_rom(Path::new(&game.path), &dir)?;
     touch(&dir);
-    // Best effort: being over the limit is untidy, not a reason to refuse to
-    // start a game.
-    let _ = prune_cache(cache_root, CACHE_LIMIT_BYTES);
     Ok(file.to_string_lossy().to_string())
+}
+
+/// Replace a game's archive with the unpacked ROM inside it.
+///
+/// Keeping both is the cost of storing a disc game compressed: a 3.5 GB `.7z`
+/// plus the 3.2 GB copy the emulator actually reads. This collapses that to
+/// one file. The unpacked ROM is moved out of the cache and into the folder
+/// the archive lived in, the library entry is pointed at it, and only then is
+/// the archive deleted.
+///
+/// That order matters and is the whole design. The replacement is put in
+/// place and checked before anything is removed, so an interruption at any
+/// point leaves you with at least one working copy. Moving it out of the
+/// cache also takes it out of reach of eviction, which would otherwise be
+/// free to delete the only remaining copy of the game.
+///
+/// This deletes something of yours, which nothing else in Playdex does. It
+/// only ever happens when asked for directly.
+pub fn unpack_in_place(
+    conn: &rusqlite::Connection,
+    game: &Game,
+    cache_root: &Path,
+) -> Result<String> {
+    let archive = PathBuf::from(&game.path);
+    let ext = archive
+        .extension()
+        .and_then(|e| e.to_str())
+        .unwrap_or("")
+        .to_ascii_lowercase();
+
+    if !crate::platforms::ARCHIVE_EXTS.contains(&ext.as_str()) {
+        return Err(AppError::Other(
+            "This game is not in an archive, so there is nothing to unpack.".into(),
+        ));
+    }
+    if !archive.exists() {
+        return Err(AppError::Other(format!("Missing: {}", game.path)));
+    }
+
+    // Unpack now if it has not been already.
+    let dir = cache_dir_for(game, cache_root);
+    let unpacked = crate::hashing::extract_rom(&archive, &dir)?;
+    let size = std::fs::metadata(&unpacked)?.len();
+
+    let leaf = unpacked
+        .file_name()
+        .ok_or_else(|| AppError::Other("The unpacked ROM has no name".into()))?;
+    let parent = archive
+        .parent()
+        .ok_or_else(|| AppError::Other("The archive has no folder".into()))?;
+    let destination = parent.join(leaf);
+
+    if destination.exists() {
+        return Err(AppError::Other(format!(
+            "{} is already there. Nothing was changed.",
+            destination.display()
+        )));
+    }
+
+    // Rename where we can; a cache on another drive needs a real copy.
+    if std::fs::rename(&unpacked, &destination).is_err() {
+        std::fs::copy(&unpacked, &destination)?;
+    }
+
+    // Refuse to go further unless the replacement really arrived intact.
+    match std::fs::metadata(&destination) {
+        Ok(m) if m.len() == size => {}
+        _ => {
+            let _ = std::fs::remove_file(&destination);
+            return Err(AppError::Other(
+                "The unpacked ROM did not copy across cleanly, so the archive was left alone."
+                    .into(),
+            ));
+        }
+    }
+
+    // Only now is there a spare copy to lose.
+    std::fs::remove_file(&archive)?;
+    let _ = std::fs::remove_dir_all(&dir);
+
+    let new_path = destination.to_string_lossy().to_string();
+    let new_name = leaf.to_string_lossy().to_string();
+    conn.execute(
+        "UPDATE games SET path = ?2, filename = ?3, inner_name = NULL, size = ?4
+         WHERE id = ?1",
+        rusqlite::params![game.id, new_path, new_name, size as i64],
+    )?;
+
+    Ok(format!(
+        "Unpacked to {new_name} and deleted the archive. The hashes are unchanged, since they were always of the ROM inside."
+    ))
 }
 
 /// What the unpacked-ROM cache is costing, for somewhere to show it.
@@ -407,6 +507,9 @@ pub fn launch(
                 core_extensions(Path::new(&p), &core)
             });
         let rom = playable_path(game, cache_root, accepts.as_deref())?;
+        // Trim afterwards, so a game is never evicted to make room for itself.
+        // Untidy is not a reason to refuse to start something, so best effort.
+        let _ = prune_cache(cache_root, cache_limit(&guard));
 
         let command = build_command(&guard, game, &rom)?;
 

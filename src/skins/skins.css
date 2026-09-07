@@ -49,6 +49,10 @@ body.skin-switch {
   background: linear-gradient(180deg, var(--sw-bg) 0%, var(--sw-bg-2) 100%);
   color: var(--sw-text);
   isolation: isolate;
+  /* Nothing here may scroll the shell itself. The row scrolls; the backdrop,
+     the status bar and the button legend are painted to the window and stay
+     put. */
+  overflow: hidden;
 }
 
 /* Backdrop: the selected game's art, blown up and blurred past reading, so
@@ -153,6 +157,7 @@ body.skin-switch {
   flex-direction: column;
   justify-content: center;
   min-height: 0;
+  min-width: 0;
 }
 
 .sw-row {
@@ -162,6 +167,11 @@ body.skin-switch {
   overflow-x: auto;
   padding: 30px 34px;
   scrollbar-width: none;
+  /* A flex item will not shrink below its own content unless told to, so
+     without this the row grew wider than the window instead of scrolling
+     inside it. The whole shell then scrolled sideways and the clock and the
+     backdrop, sized to the window, slid away with it. */
+  min-width: 0;
 }
 .sw-row::-webkit-scrollbar { display: none; }
 
@@ -797,4 +807,15 @@ body.skin-steam {
   text-transform: none;
   letter-spacing: 0;
   vertical-align: middle;
+}
+
+/* The offer to collapse an archived game down to one copy. Set apart from
+   the plain file path above it, since it is the one control in Playdex that
+   deletes something of yours. */
+.unpack-box {
+  margin-top: 10px;
+  padding: 11px 13px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  background: var(--surface-2);
 }

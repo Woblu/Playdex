@@ -37,6 +37,15 @@ export default function GameDetail({
   onHackAdded,
 }: Props) {
   const [allPlatforms, setAllPlatforms] = useState<PlatformInfo[]>([]);
+  const [confirmUnpack, setConfirmUnpack] = useState(false);
+  const [unpacking, setUnpacking] = useState(false);
+  const [unpackNote, setUnpackNote] = useState<string | null>(null);
+
+  // Windows paths use backslashes, so both separators have to split.
+  const fileName = game.path.split(/[\\/]/).pop() ?? game.path;
+  // Only archives have a second copy to collapse. `.rar` is excluded because
+  // Playdex cannot open one in the first place.
+  const isArchived = /\.(zip|7z)$/i.test(game.path);
   const [command, setCommand] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [scrapeNote, setScrapeNote] = useState<string | null>(null);
@@ -328,6 +337,64 @@ export default function GameDetail({
 
         <div className="section-title">File</div>
         <div className="path-box">{game.path}</div>
+
+        {isArchived && (
+          <div className="unpack-box">
+            {unpackNote ? (
+              <div className="hint">{unpackNote}</div>
+            ) : confirmUnpack ? (
+              <>
+                <div className="hint">
+                  This deletes <strong>{fileName}</strong> and keeps the ROM
+                  inside it, in the same folder. One copy instead of two. It
+                  cannot be undone, and the archive is only removed once the
+                  unpacked ROM is safely in place.
+                </div>
+                <div className="row" style={{ marginTop: 8 }}>
+                  <button
+                    className="btn small primary"
+                    disabled={unpacking}
+                    onClick={async () => {
+                      setUnpacking(true);
+                      try {
+                        setUnpackNote(await api.unpackInPlace(game.id));
+                        setConfirmUnpack(false);
+                        onHackAdded();
+                      } catch (e) {
+                        setUnpackNote(api.errorMessage(e));
+                      } finally {
+                        setUnpacking(false);
+                      }
+                    }}
+                  >
+                    {unpacking ? "Unpacking…" : "Unpack and delete the archive"}
+                  </button>
+                  <button
+                    className="btn small"
+                    disabled={unpacking}
+                    onClick={() => setConfirmUnpack(false)}
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="hint">
+                  Stored compressed, so playing it keeps a second, unpacked
+                  copy as well.
+                </div>
+                <button
+                  className="btn small"
+                  style={{ marginTop: 8 }}
+                  onClick={() => setConfirmUnpack(true)}
+                >
+                  Unpack and keep only the ROM
+                </button>
+              </>
+            )}
+          </div>
+        )}
 
         {command && (
           <>
