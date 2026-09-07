@@ -112,6 +112,17 @@ extensions alone don't settle it. Playdex works through this order:
 7. Failing all that, the first candidate system, which you can correct from the
    game's detail panel
 
+Sony discs are the exception to all of that: nothing in a PlayStation or PSP
+header says what it is. They are identified by reading the disc's own
+filesystem instead — the ISO 9660 volume descriptor at sector 16, the root
+directory it points at, and the one small file in there that answers the
+question. `SYSTEM.CNF` names the boot executable under `BOOT2` on a
+PlayStation 2 and `BOOT` on a PlayStation; a PSP disc carries `UMD_DATA.BIN`
+and `PSP_GAME`. Three short reads, wherever the image is on disk. This only
+works for images with 2048-byte sectors, which is what `.iso` means — a raw
+`.bin` track wraps every sector in error correction and is a different
+problem.
+
 Step 4 is the only one that isn't a guess. Extensions and filenames are what
 somebody typed; a magic number is what the machine wrote. It exists for the
 ambiguous cases: a `.iso` could be six different systems, but a disc image
