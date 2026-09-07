@@ -518,6 +518,7 @@ export default function App() {
       {settingsOpen && (
         <SettingsModal
           onSkinChange={setSkin}
+          onScanRequest={() => void handleScan()}
           onClose={() => {
             setSettingsOpen(false);
             void loadSkin();

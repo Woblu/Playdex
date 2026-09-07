@@ -32,9 +32,19 @@ interface Props {
   onClose: () => void;
   /** Applied at once, so the picker is its own preview. */
   onSkinChange: (skin: SkinName) => void;
+  /**
+   * Scan and fetch metadata, exactly as the button and a dropped folder do.
+   * Adding a folder is a request to have its games; making that a second
+   * thing to go and press was an oversight, not a decision.
+   */
+  onScanRequest: () => void;
 }
 
-export default function SettingsModal({ onClose, onSkinChange }: Props) {
+export default function SettingsModal({
+  onClose,
+  onSkinChange,
+  onScanRequest,
+}: Props) {
   const [tab, setTab] = useState<Tab>("folders");
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
   const [platforms, setPlatforms] = useState<PlatformInfo[]>([]);
@@ -261,6 +271,8 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
       if (!path) return;
       await api.addLibraryFolder(path, null);
       await reload();
+      // You added a folder because you want what is in it.
+      onScanRequest();
     } catch (err) {
       setError(api.errorMessage(err));
     }
@@ -349,6 +361,9 @@ export default function SettingsModal({ onClose, onSkinChange }: Props) {
                     onChange={async (e) => {
                       await api.addLibraryFolder(f.path, e.target.value || null);
                       await reload();
+                      // Assigning a system changes what everything beneath it
+                      // is, so the entries under it are re-detected.
+                      onScanRequest();
                     }}
                   >
                     <option value="">Detect</option>
