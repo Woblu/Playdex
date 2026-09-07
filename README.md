@@ -42,6 +42,23 @@ Existing entries are normally left alone. Two exceptions:
   heuristic cleans up after itself. The file on disk is never touched. Anything
   you've played, favourited, patched or used as a hack's base game is exempt.
 
+### Adding games
+
+Drag a ROM onto the window and it joins the library. The whole window is the
+target, since someone dragging a file at a program is not aiming at anything in
+particular.
+
+Dropped files are indexed where they lie rather than copied anywhere. It is
+your ROM in your folder, and quietly duplicating gigabytes into the app data
+directory to make the bookkeeping tidier is not a trade worth making. Drop a
+*folder* and it becomes a library folder, then gets scanned, which is plainly
+what dropping a folder means.
+
+Either way it runs the same indexing a scan does: same platform detection, same
+rejection rules, same hashing, same cleaned-up title, and the same automatic
+metadata fetch afterwards. A second "quick add" path would be a second place
+for those rules to drift.
+
 ### Telling ROMs from everything else
 
 ROM folders fill up with manuals, box scans, BIOS dumps and installers, and

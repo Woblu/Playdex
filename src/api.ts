@@ -9,6 +9,7 @@ import type {
   LibraryStats,
   Cheat,
   CacheUsage,
+  DropTally,
   ScanProgress,
   DetectedEmulator,
   HackBundle,
@@ -257,3 +258,6 @@ export function errorMessage(e: unknown): string {
 
 export const cacheUsage = () => invoke<CacheUsage>("cache_usage");
 export const clearCache = () => invoke<number>("clear_cache");
+
+export const addDropped = (paths: string[]) =>
+  invoke<DropTally>("add_dropped", { paths });

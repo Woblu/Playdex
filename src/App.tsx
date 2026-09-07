@@ -19,6 +19,7 @@ import HomebrewModal from "./components/HomebrewModal";
 import StatsModal from "./components/StatsModal";
 import ProgressToast from "./components/ProgressToast";
 import UpdateBanner from "./components/UpdateBanner";
+import DropZone from "./components/DropZone";
 import { checkForUpdate, type UpdateInfo } from "./update";
 
 import LaunchboxShell from "./skins/LaunchboxShell";
@@ -60,6 +61,7 @@ export default function App() {
   const [updateDismissed, setUpdateDismissed] = useState(false);
   const [detailOpen, setDetailOpen] = useState(false);
   const [padConnected, setPadConnected] = useState(false);
+  const [dropNote, setDropNote] = useState<string | null>(null);
   const [padInfo, setPadInfo] = useState<PadInfo | null>(null);
   const [padLayout, setPadLayout] = useState<PadLayout>("auto");
   const [padCustom, setPadCustom] = useState<PadBindings | null>(null);
@@ -231,6 +233,35 @@ export default function App() {
         await refreshGames();
       }
     });
+
+  // Dropping a ROM on the window is the same act as scanning finds it, so it
+  // goes through the same indexing and then the same automatic metadata fetch.
+  const handleDrop = async (paths: string[]) => {
+    const result = await run(async () => {
+      const tally = await api.addDropped(paths);
+      await refreshGames();
+      await refreshSidebar();
+      return tally;
+    });
+    if (!result) return;
+
+    setDropNote(
+      result.reasons.length > 0
+        ? `${message(result)} — ${result.reasons[0]}`
+        : message(result),
+    );
+    window.setTimeout(() => setDropNote(null), 6000);
+
+    if (result.lastId !== null) setSelectedId(result.lastId);
+    if (result.added > 0) {
+      try {
+        await api.scrapeLibrary(null);
+      } catch {
+        // Nothing configured, or cancelled. The games are still added.
+      }
+      await refreshGames();
+    }
+  };
 
   const handleScrape = () =>
     run(async () => {
@@ -497,6 +528,10 @@ export default function App() {
         />
       )}
 
+      <DropZone onDrop={handleDrop} />
+
+      {dropNote && <div className="drop-note">{dropNote}</div>}
+
       {update && !updateDismissed && (
         <UpdateBanner info={update} onDismiss={() => setUpdateDismissed(true)} />
       )}
@@ -511,4 +546,19 @@ export default function App() {
       )}
     </>
   );
+}
+
+/** One line describing what a drop did. */
+function message(t: {
+  added: number;
+  skipped: number;
+  ignored: number;
+  folders: number;
+}): string {
+  const parts: string[] = [];
+  if (t.folders > 0) parts.push(`Added ${t.folders} folder${t.folders === 1 ? "" : "s"}`);
+  if (t.added > 0) parts.push(`Added ${t.added} game${t.added === 1 ? "" : "s"}`);
+  if (t.skipped > 0) parts.push(`${t.skipped} already in your library`);
+  if (t.ignored > 0) parts.push(`${t.ignored} not a game`);
+  return parts.length > 0 ? parts.join(", ") : "Nothing to add";
 }

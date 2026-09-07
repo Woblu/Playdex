@@ -217,3 +217,12 @@ export interface CacheUsage {
   entries: number;
   limitBytes: number;
 }
+
+export interface DropTally {
+  added: number;
+  skipped: number;
+  ignored: number;
+  folders: number;
+  lastId: number | null;
+  reasons: string[];
+}

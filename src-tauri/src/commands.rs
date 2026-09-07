@@ -871,6 +871,28 @@ pub fn enable_auto_apply_cheats(db: State<Db>) -> Result<String> {
     crate::cheats::enable_auto_apply(std::path::Path::new(&retroarch))
 }
 
+/// Files and folders dropped onto the window.
+///
+/// Folders become library folders, so a full scan follows to pick up what is
+/// inside them; dropped files are already indexed by the time that runs.
+#[tauri::command]
+pub async fn add_dropped(app: AppHandle, paths: Vec<String>) -> Result<scan::DropTally> {
+    let handle = app.clone();
+    let tally = tauri::async_runtime::spawn_blocking(move || -> Result<scan::DropTally> {
+        let db_handle = handle.state::<Db>().0.clone();
+        let paths: Vec<std::path::PathBuf> = paths.into_iter().map(Into::into).collect();
+        let tally = scan::add_paths(&db_handle, &paths)?;
+        if tally.folders > 0 {
+            scan::scan_all(&handle, &db_handle)?;
+        }
+        Ok(tally)
+    })
+    .await
+    .map_err(|e| AppError::Other(e.to_string()))??;
+
+    Ok(tally)
+}
+
 // ------------------------------------------------------ unpacked cache
 
 #[derive(serde::Serialize)]
