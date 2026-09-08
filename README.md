@@ -1,5 +1,7 @@
 # Playdex
 
+[playdex website](https://woblu.github.io/Playdex/) · [download](https://github.com/Woblu/Playdex/releases/latest)
+
 A ROM library manager and emulator launcher. Point it at the folders where you
 keep your ROMs. It identifies each one, pulls down cover art and details, and
 launches it through RetroArch or a standalone emulator. Playtime is tracked per

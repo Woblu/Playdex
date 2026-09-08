@@ -1,0 +1,940 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Playdex — a ROM library that knows what your files are</title>
+<meta name="description" content="Playdex is a ROM library manager and emulator launcher for Windows. It identifies your games by reading them, fetches artwork and details, and launches them through RetroArch or any standalone emulator.">
+<link rel="icon" href="logo.svg" type="image/svg+xml">
+<meta property="og:title" content="Playdex">
+<meta property="og:description" content="A ROM library manager and emulator launcher. It identifies your games by reading them, not by guessing from the filename.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://woblu.github.io/Playdex/">
+<meta name="theme-color" content="#0b0e13">
+<style>
+/* ------------------------------------------------------------------ tokens
+   The palette is the app's own, and the sky and brick are lifted straight
+   from the logo, which is an 8-bit scene: sky above, brick ground below.
+   The page keeps that arrangement - the hero is the sky, everything under
+   the ground line is dark. */
+:root {
+  --ink:        #0b0e13;
+  --ink-2:      #10141b;
+  --panel:      #141922;
+  --line:       #222a35;
+  --line-soft:  #1a212b;
+  --text:       #e7eaef;
+  --muted:      #96a1b1;
+  --dim:        #6b7686;
+
+  --sky:        #5c94fc;
+  --sky-bright: #8fb6ff;
+  --sky-deep:   #1a2f6b;
+
+  --brick:      #8b3a0a;
+  --brick-top:  #d06a1c;
+  --brick-dark: #2a1505;
+
+  --sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+          "Helvetica Neue", Arial, sans-serif;
+  --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas,
+          "Liberation Mono", monospace;
+
+  --wrap: 1080px;
+  --ground: 56px;
+}
+
+* { box-sizing: border-box; }
+
+html { scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  background: var(--ink);
+  color: var(--text);
+  font-family: var(--sans);
+  font-size: 16px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+img { max-width: 100%; }
+
+a { color: var(--sky-bright); }
+
+code {
+  font-family: var(--mono);
+  font-size: 0.88em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: rgba(92, 148, 252, 0.11);
+  color: var(--sky-bright);
+}
+
+:focus-visible {
+  outline: 2px solid var(--sky);
+  outline-offset: 3px;
+  border-radius: 2px;
+}
+
+.wrap {
+  width: 100%;
+  max-width: var(--wrap);
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* ------------------------------------------------------------------ type */
+h1, h2, h3 {
+  margin: 0;
+  line-height: 1.15;
+  letter-spacing: -0.022em;
+  font-weight: 650;
+}
+
+h2 { font-size: clamp(26px, 3.4vw, 38px); }
+h3 { font-size: 17px; letter-spacing: -0.01em; }
+
+p { margin: 0; }
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--sky);
+  margin-bottom: 14px;
+}
+
+.lede {
+  color: var(--muted);
+  font-size: clamp(16px, 1.6vw, 18px);
+  max-width: 62ch;
+}
+
+.section {
+  padding: clamp(64px, 9vw, 116px) 0;
+  border-top: 1px solid var(--line-soft);
+}
+
+.section-head { max-width: 68ch; margin-bottom: 44px; }
+.section-head p { margin-top: 16px; }
+
+/* ------------------------------------------------------------------ nav */
+.nav {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  backdrop-filter: blur(12px);
+  background: rgba(11, 14, 19, 0.72);
+  border-bottom: 1px solid transparent;
+  transition: border-color 0.2s, background 0.2s;
+}
+.nav.stuck {
+  border-bottom-color: var(--line);
+  background: rgba(11, 14, 19, 0.9);
+}
+.nav-in {
+  display: flex;
+  align-items: center;
+  gap: 28px;
+  height: 62px;
+}
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 660;
+  letter-spacing: -0.02em;
+  font-size: 17px;
+  color: var(--text);
+  text-decoration: none;
+  margin-right: auto;
+}
+.brand img { width: 24px; height: 24px; image-rendering: pixelated; }
+.nav a.link {
+  color: var(--muted);
+  text-decoration: none;
+  font-size: 14.5px;
+}
+.nav a.link:hover { color: var(--text); }
+.nav .only-wide { display: none; }
+@media (min-width: 720px) { .nav .only-wide { display: inline; } }
+
+/* ------------------------------------------------------------------ hero
+   Sky, stars and pixel clouds, closed off by a brick ground. Every piece is
+   drawn here rather than taken from anywhere: hard-edged rectangles in the
+   logo's own colours. */
+.hero {
+  position: relative;
+  isolation: isolate;
+  padding: clamp(72px, 11vw, 132px) 0 calc(var(--ground) + clamp(72px, 10vw, 118px));
+  overflow: hidden;
+  /* Banded rather than smooth: hard steps read as a dithered 8-bit sky where
+     a continuous gradient would read as a modern one. */
+  background: linear-gradient(
+    180deg,
+    #070910 0%,  #070910 14%,
+    #0a1124 14%, #0a1124 30%,
+    #0f1b3d 30%, #0f1b3d 46%,
+    #17275c 46%, #17275c 62%,
+    #24417f 62%, #24417f 78%,
+    #3a63b8 78%, #3a63b8 90%,
+    #5c94fc 90%, #5c94fc 100%);
+}
+
+.stars {
+  position: absolute;
+  inset: 0 0 45% 0;
+  z-index: -3;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='300'%3E%3Cg fill='%23ffffff'%3E%3Crect x='31' y='44' width='3' height='3' opacity='.62'/%3E%3Crect x='118' y='22' width='3' height='3' opacity='.34'/%3E%3Crect x='205' y='71' width='3' height='3' opacity='.5'/%3E%3Crect x='287' y='36' width='3' height='3' opacity='.28'/%3E%3Crect x='63' y='131' width='3' height='3' opacity='.44'/%3E%3Crect x='166' y='158' width='3' height='3' opacity='.3'/%3E%3Crect x='249' y='118' width='3' height='3' opacity='.55'/%3E%3Crect x='330' y='183' width='3' height='3' opacity='.36'/%3E%3Crect x='14' y='226' width='3' height='3' opacity='.26'/%3E%3Crect x='96' y='262' width='3' height='3' opacity='.4'/%3E%3Crect x='214' y='241' width='3' height='3' opacity='.24'/%3E%3Crect x='301' y='276' width='3' height='3' opacity='.34'/%3E%3C/g%3E%3C/svg%3E");
+  animation: twinkle 7s steps(2, end) infinite;
+}
+@keyframes twinkle { 50% { opacity: 0.55; } }
+
+.cloud {
+  position: absolute;
+  z-index: -2;
+  image-rendering: pixelated;
+  opacity: 0.9;
+  pointer-events: none;
+}
+.cloud svg { display: block; }
+.c1 { top: 15%; left: 4%;   width: 168px; animation: drift 34s ease-in-out infinite alternate; }
+.c2 { top: 33%; left: 34%;  width: 104px; opacity: .5;  animation: drift 46s ease-in-out infinite alternate-reverse; }
+.c3 { top: 21%; left: 71%;  width: 140px; opacity: .72; animation: drift 40s ease-in-out infinite alternate; }
+@keyframes drift {
+  from { transform: translateX(-14px); }
+  to   { transform: translateX(14px); }
+}
+
+/* A stepped silhouette sitting on the ground, for depth. */
+.ridge {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: var(--ground);
+  height: 96px;
+  z-index: -2;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='256' height='48' shape-rendering='crispEdges'%3E%3Cg fill='%232b4a8f'%3E%3Crect x='24' y='36' width='96' height='12'/%3E%3Crect x='36' y='24' width='72' height='12'/%3E%3Crect x='48' y='12' width='48' height='12'/%3E%3Crect x='60' y='0' width='24' height='12'/%3E%3Crect x='152' y='36' width='72' height='12'/%3E%3Crect x='164' y='24' width='48' height='12'/%3E%3Crect x='176' y='12' width='24' height='12'/%3E%3C/g%3E%3C/svg%3E") repeat-x bottom;
+  background-size: 256px 48px;
+}
+
+/* The ground the logo stands on, in the logo's exact palette. */
+.ground {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: var(--ground);
+  z-index: -1;
+  background:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='56' shape-rendering='crispEdges'%3E%3Crect width='128' height='56' fill='%238b3a0a'/%3E%3Crect width='128' height='4' fill='%23d06a1c'/%3E%3Crect y='26' width='128' height='4' fill='%232a1505'/%3E%3Crect x='12' width='4' height='26' fill='%232a1505'/%3E%3Crect x='76' width='4' height='26' fill='%232a1505'/%3E%3Crect x='44' y='30' width='4' height='26' fill='%232a1505'/%3E%3Crect x='108' y='30' width='4' height='26' fill='%232a1505'/%3E%3C/svg%3E") repeat-x;
+  background-size: 128px 56px;
+  image-rendering: pixelated;
+}
+
+/* A faint CRT grille over the whole sky. */
+.scan {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.16) 0 1px,
+    rgba(0, 0, 0, 0) 1px 3px);
+  mix-blend-mode: multiply;
+}
+
+.hero-in { position: relative; max-width: 720px; }
+
+.hero h1 {
+  font-size: clamp(38px, 6.4vw, 66px);
+  letter-spacing: -0.035em;
+  font-weight: 700;
+  margin-bottom: 20px;
+}
+.hero h1 .accent { color: var(--sky-bright); }
+
+.hero .lede {
+  font-size: clamp(17px, 1.9vw, 20px);
+  color: #c4cfe2;
+  max-width: 56ch;
+}
+
+.hero-mark {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 26px;
+}
+.hero-mark img { width: 44px; height: 44px; image-rendering: pixelated; }
+.hero-mark span {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #a8bde8;
+}
+
+.cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: center;
+  margin-top: 34px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  padding: 12px 20px;
+  border-radius: 8px;
+  font-size: 15px;
+  font-weight: 600;
+  text-decoration: none;
+  border: 1px solid transparent;
+  transition: transform 0.12s ease, background 0.15s, border-color 0.15s;
+}
+.btn:active { transform: translateY(1px); }
+.btn-primary {
+  background: var(--text);
+  color: #0b0e13;
+}
+.btn-primary:hover { background: #fff; }
+.btn-ghost {
+  border-color: rgba(255, 255, 255, 0.28);
+  color: var(--text);
+  background: rgba(10, 14, 24, 0.34);
+}
+.btn-ghost:hover { border-color: rgba(255, 255, 255, 0.55); }
+
+.cta .note {
+  font-size: 13.5px;
+  color: #9fb2d4;
+}
+
+/* ------------------------------------------------------------- app frame
+   An illustration of the layout, not a screenshot. Deliberately without game
+   titles or box art: the shape is the point, and the artwork in a real
+   library belongs to the people who made those games. */
+.shot {
+  margin-top: clamp(56px, 7vw, 84px);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  overflow: hidden;
+  background: var(--ink-2);
+  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.85);
+}
+.shot-bar {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--line-soft);
+  background: #0f131a;
+}
+.shot-bar i {
+  width: 9px; height: 9px; border-radius: 50%;
+  background: #2b3441; display: block;
+}
+.shot-bar b {
+  margin-left: 10px;
+  font-weight: 500;
+  font-size: 12px;
+  color: var(--dim);
+  font-family: var(--mono);
+}
+.shot-body { display: grid; grid-template-columns: 150px 1fr; min-height: 268px; }
+@media (min-width: 860px) { .shot-body { grid-template-columns: 172px 1fr 196px; } }
+
+.shot-side { border-right: 1px solid var(--line-soft); padding: 14px 12px; }
+.shot-side .row {
+  display: flex; align-items: center; gap: 9px;
+  padding: 6px 8px; border-radius: 6px;
+  font-size: 12.5px; color: var(--muted);
+}
+.shot-side .row.on { background: rgba(92, 148, 252, 0.13); color: var(--text); }
+.shot-side .row s {
+  width: 12px; height: 12px; border-radius: 3px; flex: none;
+  background: #2a3341; text-decoration: none;
+}
+.shot-side .row.on s { background: var(--sky); }
+.shot-side .row em { margin-left: auto; font-style: normal; color: var(--dim); font-size: 11px; }
+
+.shot-main { padding: 16px; }
+.shot-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
+}
+@media (min-width: 860px) { .shot-grid { grid-template-columns: repeat(5, 1fr); } }
+.tile {
+  aspect-ratio: 3 / 4;
+  border-radius: 5px;
+  border: 1px solid var(--line-soft);
+  background:
+    linear-gradient(155deg, rgba(92,148,252,0.20), rgba(92,148,252,0.03) 62%),
+    #171d27;
+}
+.tile:nth-child(3n)   { background: linear-gradient(155deg, rgba(208,106,28,0.18), rgba(208,106,28,0.02) 62%), #171d27; }
+.tile:nth-child(4n+1) { background: linear-gradient(155deg, rgba(255,255,255,0.10), rgba(255,255,255,0.01) 62%), #171d27; }
+
+.shot-panel { border-left: 1px solid var(--line-soft); padding: 16px 14px; display: none; }
+@media (min-width: 860px) { .shot-panel { display: block; } }
+.shot-panel .art {
+  aspect-ratio: 16 / 10; border-radius: 5px; margin-bottom: 12px;
+  border: 1px solid var(--line-soft);
+  background: linear-gradient(150deg, rgba(92,148,252,0.24), rgba(11,14,19,0.4)), #161c26;
+}
+.bar { height: 7px; border-radius: 3px; background: #1e2632; margin-bottom: 8px; }
+.bar.w70 { width: 70%; } .bar.w90 { width: 90%; } .bar.w50 { width: 50%; }
+.bar.w40 { width: 40%; } .bar.w80 { width: 80%; }
+.bar.hi { background: #2c384a; }
+
+/* --------------------------------------------------------------- pillars */
+.pillars {
+  display: grid;
+  gap: 28px;
+  grid-template-columns: 1fr;
+}
+@media (min-width: 760px) { .pillars { grid-template-columns: repeat(3, 1fr); gap: 34px; } }
+.pillar h3 { margin-bottom: 10px; }
+.pillar p { color: var(--muted); font-size: 15px; }
+.pillar .num {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  color: var(--sky);
+  display: block;
+  margin-bottom: 12px;
+}
+
+/* ---------------------------------------------------------- the cascade */
+.cascade { display: grid; gap: 40px; align-items: start; }
+@media (min-width: 900px) { .cascade { grid-template-columns: 1fr 1fr; gap: 64px; } }
+
+.steps { border-left: 2px solid var(--line); padding-left: 0; margin: 0; list-style: none; }
+.steps li {
+  position: relative;
+  padding: 0 0 24px 26px;
+  font-size: 15px;
+  color: var(--muted);
+}
+.steps li:last-child { padding-bottom: 0; }
+.steps li::before {
+  content: "";
+  position: absolute;
+  left: -7px; top: 7px;
+  width: 12px; height: 12px;
+  background: var(--ink);
+  border: 2px solid var(--line-soft);
+  border-radius: 3px;
+}
+.steps li.win::before { background: var(--sky); border-color: var(--sky); }
+.steps li b { color: var(--text); font-weight: 600; display: block; margin-bottom: 3px; }
+
+.quote {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  padding: 22px 24px;
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.85;
+  color: var(--muted);
+  overflow-x: auto;
+}
+.quote .k { color: var(--sky-bright); }
+.quote .c { color: var(--dim); }
+
+/* ------------------------------------------------------------ appearance */
+.skins { display: grid; gap: 22px; }
+@media (min-width: 820px) { .skins { grid-template-columns: repeat(3, 1fr); } }
+.skin {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  overflow: hidden;
+}
+.skin .draw { height: 132px; border-bottom: 1px solid var(--line-soft); padding: 12px; background: #10151d; }
+.skin .meta { padding: 16px 18px 20px; }
+.skin h3 { margin-bottom: 7px; }
+.skin p { color: var(--muted); font-size: 14px; }
+
+/* miniature layouts, drawn rather than photographed */
+.mini { height: 100%; display: flex; gap: 7px; }
+.mini u { display: block; background: #1b2230; border-radius: 3px; text-decoration: none; }
+.mini .col { display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.mini .rail { width: 22px; background: #1b2230; border-radius: 3px; }
+.mini .cells { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; flex: 1; }
+.mini .cells u { border-radius: 3px; }
+.mini .big { flex: 1; background: linear-gradient(150deg, rgba(92,148,252,0.3), rgba(11,14,19,0.2)); border-radius: 4px; }
+.mini .icons { display: flex; gap: 8px; align-items: center; justify-content: center; flex: 1; }
+.mini .icons u { width: 34px; height: 34px; border-radius: 6px; }
+.mini .icons u.mid { width: 46px; height: 46px; background: #26405f; }
+.mini .strip { height: 30px; display: flex; gap: 6px; }
+.mini .strip u { flex: 1; border-radius: 3px; }
+
+/* ---------------------------------------------------------------- cards */
+.cards { display: grid; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
+@media (min-width: 700px) { .cards { grid-template-columns: repeat(2, 1fr); } }
+@media (min-width: 1000px) { .cards { grid-template-columns: repeat(3, 1fr); } }
+.card { background: var(--ink); padding: 26px 24px; }
+.card h3 { margin-bottom: 9px; }
+.card p { color: var(--muted); font-size: 14.5px; }
+.card .ico {
+  width: 26px; height: 26px; margin-bottom: 14px;
+  image-rendering: pixelated; display: block;
+}
+
+/* ------------------------------------------------------------- download */
+.get {
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    radial-gradient(120% 140% at 50% -20%, rgba(92, 148, 252, 0.16), transparent 60%),
+    var(--panel);
+  padding: clamp(34px, 5vw, 56px);
+  text-align: center;
+}
+.get h2 { margin-bottom: 14px; }
+.get .lede { margin: 0 auto; }
+.get .cta { justify-content: center; }
+.reqs {
+  margin-top: 26px;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--dim);
+  line-height: 2;
+}
+
+/* ---------------------------------------------------------------- foot */
+.foot {
+  border-top: 1px solid var(--line-soft);
+  padding: 44px 0 56px;
+  color: var(--dim);
+  font-size: 14px;
+}
+.foot-in { display: flex; flex-wrap: wrap; gap: 20px 32px; align-items: center; }
+.foot a { color: var(--muted); text-decoration: none; }
+.foot a:hover { color: var(--text); }
+.foot .scope {
+  flex-basis: 100%;
+  max-width: 62ch;
+  color: var(--dim);
+  font-size: 13.5px;
+  border-left: 2px solid var(--line);
+  padding-left: 14px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .stars, .cloud { animation: none !important; }
+  * { transition: none !important; }
+}
+</style>
+</head>
+<body>
+
+<nav class="nav" id="nav">
+  <div class="wrap nav-in">
+    <a class="brand" href="#top">
+      <img src="logo.svg" alt="">
+      Playdex
+    </a>
+    <a class="link only-wide" href="#how">How it works</a>
+    <a class="link only-wide" href="#looks">Appearances</a>
+    <a class="link only-wide" href="#features">Features</a>
+    <a class="link" href="https://github.com/Woblu/Playdex">GitHub</a>
+    <a class="link" href="#get">Download</a>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="stars" aria-hidden="true"></div>
+
+  <div class="cloud c1" aria-hidden="true">
+    <svg viewBox="0 0 12 4" shape-rendering="crispEdges" fill="#ffffff">
+      <rect x="4" y="0" width="4" height="1"/>
+      <rect x="2" y="1" width="8" height="1"/>
+      <rect x="1" y="2" width="10" height="1"/>
+      <rect x="0" y="3" width="12" height="1" fill="#dfe9ff"/>
+    </svg>
+  </div>
+  <div class="cloud c2" aria-hidden="true">
+    <svg viewBox="0 0 12 4" shape-rendering="crispEdges" fill="#ffffff">
+      <rect x="5" y="0" width="3" height="1"/>
+      <rect x="3" y="1" width="7" height="1"/>
+      <rect x="1" y="2" width="10" height="1"/>
+      <rect x="0" y="3" width="12" height="1" fill="#dfe9ff"/>
+    </svg>
+  </div>
+  <div class="cloud c3" aria-hidden="true">
+    <svg viewBox="0 0 12 4" shape-rendering="crispEdges" fill="#ffffff">
+      <rect x="3" y="0" width="4" height="1"/>
+      <rect x="2" y="1" width="7" height="1"/>
+      <rect x="1" y="2" width="10" height="1"/>
+      <rect x="0" y="3" width="12" height="1" fill="#dfe9ff"/>
+    </svg>
+  </div>
+
+  <div class="ridge" aria-hidden="true"></div>
+  <div class="ground" aria-hidden="true"></div>
+  <div class="scan" aria-hidden="true"></div>
+
+  <div class="wrap">
+    <div class="hero-in">
+      <div class="hero-mark">
+        <img src="logo.svg" alt="Playdex">
+        <span>Windows &middot; free &middot; open source</span>
+      </div>
+      <h1>A ROM library that knows<br><span class="accent">what your files are.</span></h1>
+      <p class="lede">
+        Point Playdex at the folders where you keep your games. It works out what
+        each one is by reading it, pulls down the artwork and the details, and
+        launches it through RetroArch or whatever emulator you already use.
+      </p>
+      <div class="cta">
+        <a class="btn btn-primary" href="https://github.com/Woblu/Playdex/releases/latest">
+          Download for Windows
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/Woblu/Playdex">Source on GitHub</a>
+        <span class="note">Updates itself after that.</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<main>
+
+  <!-- ------------------------------------------------------------- shot -->
+  <div class="wrap">
+    <div class="shot" role="img" aria-label="Illustration of the Playdex layout: a sidebar of systems, a grid of games, and a detail panel.">
+      <div class="shot-bar">
+        <i></i><i></i><i></i>
+        <b>Playdex</b>
+      </div>
+      <div class="shot-body">
+        <div class="shot-side">
+          <div class="row on"><s></s> All games <em>1,284</em></div>
+          <div class="row"><s></s> Nintendo 64 <em>112</em></div>
+          <div class="row"><s></s> PlayStation <em>309</em></div>
+          <div class="row"><s></s> PlayStation 2 <em>77</em></div>
+          <div class="row"><s></s> Dreamcast <em>41</em></div>
+          <div class="row"><s></s> Mega Drive <em>186</em></div>
+          <div class="row"><s></s> Game Boy <em>224</em></div>
+        </div>
+        <div class="shot-main">
+          <div class="shot-grid">
+            <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+            <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+            <div class="tile"></div><div class="tile"></div><div class="tile"></div>
+            <div class="tile"></div>
+          </div>
+        </div>
+        <div class="shot-panel">
+          <div class="art"></div>
+          <div class="bar w80 hi"></div>
+          <div class="bar w50"></div>
+          <div class="bar w90"></div>
+          <div class="bar w70"></div>
+          <div class="bar w40"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ---------------------------------------------------------- pillars -->
+  <section class="section" id="what">
+    <div class="wrap">
+      <div class="pillars">
+        <div class="pillar">
+          <span class="num">01</span>
+          <h3>It identifies your games</h3>
+          <p>
+            Filenames lie and folders get messy. Playdex reads the file itself —
+            headers, disc filesystems, what is inside the archive — and works out
+            which system it belongs to from that.
+          </p>
+        </div>
+        <div class="pillar">
+          <span class="num">02</span>
+          <h3>It fills in everything else</h3>
+          <p>
+            Cover art, descriptions, developer, release date, players, region.
+            Fetched automatically the moment a scan finishes, matched on the
+            ROM's own checksums so it lands on the right game.
+          </p>
+        </div>
+        <div class="pillar">
+          <span class="num">03</span>
+          <h3>It launches whatever you have</h3>
+          <p>
+            A libretro core through RetroArch, or a standalone emulator you point
+            it at. Set it per system, or override it for one awkward game that
+            needs something different.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ---------------------------------------------------------- cascade -->
+  <section class="section" id="how">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">How it works</div>
+        <h2>It reads the file, not the filename.</h2>
+        <p class="lede">
+          <code>.iso</code>, <code>.bin</code> and <code>.chd</code> belong to a
+          dozen systems between them, so an extension is barely a hint. Playdex
+          works down a ladder of evidence and stops at the first rung that
+          actually settles it.
+        </p>
+      </div>
+
+      <div class="cascade">
+        <ol class="steps">
+          <li>
+            <b>A folder you assigned</b>
+            If you have told it that this folder is Dreamcast, that is the end of it.
+          </li>
+          <li>
+            <b>An extension only one system uses</b>
+            <code>.sfc</code> is a Super Nintendo cartridge and nothing else.
+          </li>
+          <li>
+            <b>What is inside the archive</b>
+            A <code>.7z</code> belongs to no system; the ROM inside it does.
+          </li>
+          <li class="win">
+            <b>The bytes themselves</b>
+            A Wii dump carries four known bytes at <code>0x18</code>. A Saturn disc
+            writes its name into the first sector. A PlayStation 2 disc says nothing
+            at all — so Playdex reads the disc's filesystem and finds the file that
+            names its boot executable. It does this on raw <code>.bin</code> tracks
+            too, stepping over the sync marks and error correction a real CD carries.
+          </li>
+          <li>
+            <b>The folder names, then the ROM's own name</b>
+            Last resorts, matched on whole words, so a title is never mistaken for a
+            system whose letters it happens to contain.
+          </li>
+        </ol>
+
+        <div>
+          <div class="quote">
+            <span class="c">// what a PlayStation 2 disc actually says about itself</span><br>
+            sector 16 &nbsp;<span class="k">→</span>&nbsp; <span class="c">CD001</span> &nbsp;&nbsp;&nbsp;<span class="c">// an ISO 9660 filesystem</span><br>
+            root dir &nbsp;&nbsp;<span class="k">→</span>&nbsp; SYSTEM.CNF<br>
+            SYSTEM.CNF <span class="k">→</span>&nbsp; <span class="k">BOOT2</span> = cdrom0:\SLUS_203.12<br>
+            <br>
+            <span class="c">// BOOT2 is the PlayStation 2 key.<br>
+            // plain BOOT would be the original PlayStation.</span>
+          </div>
+          <p class="lede" style="margin-top:20px; font-size:15px;">
+            Every ROM is hashed as it goes in — CRC32, MD5 and SHA1 in a single
+            pass. For a zipped game the ROM <em>inside</em> is hashed, not the
+            archive, because that is what the metadata databases and the
+            No-Intro and Redump catalogues index.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ------------------------------------------------------------ skins -->
+  <section class="section" id="looks">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Appearances</div>
+        <h2>Three ways to look at it.</h2>
+        <p class="lede">
+          Not a colour swap — three separate layouts, because a desk and a sofa
+          want different shapes. Everything works the same in all of them.
+        </p>
+      </div>
+
+      <div class="skins">
+        <div class="skin">
+          <div class="draw">
+            <div class="mini">
+              <u class="rail"></u>
+              <div class="cells">
+                <u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u>
+              </div>
+            </div>
+          </div>
+          <div class="meta">
+            <h3>Playdex</h3>
+            <p>The desktop view. Sidebar of systems, a sortable grid, and a detail panel for whatever you have selected.</p>
+          </div>
+        </div>
+
+        <div class="skin">
+          <div class="draw">
+            <div class="mini">
+              <div class="col">
+                <div class="icons"><u></u><u class="mid"></u><u></u></div>
+                <div class="strip"><u></u><u></u><u></u><u></u><u></u></div>
+              </div>
+            </div>
+          </div>
+          <div class="meta">
+            <h3>Console</h3>
+            <p>A home screen. One row of large icons sized against the window, and a row of round buttons underneath.</p>
+          </div>
+        </div>
+
+        <div class="skin">
+          <div class="draw">
+            <div class="mini">
+              <u class="rail"></u>
+              <div class="col">
+                <div class="big"></div>
+                <div class="strip"><u></u><u></u><u></u><u></u></div>
+              </div>
+            </div>
+          </div>
+          <div class="meta">
+            <h3>Big Picture</h3>
+            <p>Living room. Hero artwork, a left rail, and a shelf of capsules. Drive the whole thing from a controller.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- features -->
+  <section class="section" id="features">
+    <div class="wrap">
+      <div class="section-head">
+        <div class="eyebrow">Everything else</div>
+        <h2>The parts you only notice when they are missing.</h2>
+      </div>
+
+      <div class="cards">
+        <div class="card">
+          <h3>Artwork and details</h3>
+          <p>
+            ScreenScraper and TheGamesDB for text, libretro-thumbnails for art,
+            which needs no account at all. Runs on its own after a scan.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Multi-disc games</h3>
+          <p>
+            A three-disc game is one entry. Playdex writes the playlist and the
+            emulator swaps discs itself when the game asks for the next one.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Cheats</h3>
+          <p>
+            Found per game, switched on where you can see them, and written where
+            RetroArch looks for them the moment you press play.
+          </p>
+        </div>
+        <div class="card">
+          <h3>ROM hacks</h3>
+          <p>
+            Apply an IPS, UPS or BPS patch and the result joins your library as
+            its own game. Your original ROM is never modified.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Verify your dumps</h3>
+          <p>
+            Import a No-Intro or Redump catalogue and Playdex tells you which of
+            your files are known-good and which are something else.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Saves</h3>
+          <p>
+            Find the save files and save states for a game wherever the emulator
+            hid them, and copy them somewhere safe before you overwrite one.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Controller</h3>
+          <p>
+            Navigate the whole app from a gamepad, with the buttons remappable
+            for pads that report themselves oddly.
+          </p>
+        </div>
+        <div class="card">
+          <h3>Drag and drop</h3>
+          <p>
+            Drop a ROM anywhere on the window and it joins the library where it
+            lies. Drop a folder and it becomes a library folder and gets scanned.
+          </p>
+        </div>
+        <div class="card">
+          <h3>It updates itself</h3>
+          <p>
+            New versions are signed and arrive in the app. You install it once
+            and then stop thinking about it.
+          </p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- --------------------------------------------------------- download -->
+  <section class="section" id="get">
+    <div class="wrap">
+      <div class="get">
+        <div class="eyebrow" style="text-align:center">Download</div>
+        <h2>Point it at a folder and see.</h2>
+        <p class="lede" style="margin-top:14px">
+          One installer. It finds RetroArch on its own if you have it, and the
+          first scan tells you what it found and what it could not make sense of.
+        </p>
+        <div class="cta">
+          <a class="btn btn-primary" href="https://github.com/Woblu/Playdex/releases/latest">
+            Download the latest release
+          </a>
+          <a class="btn btn-ghost" href="https://github.com/Woblu/Playdex#readme">Read the docs</a>
+        </div>
+        <div class="reqs">
+          Windows 10 or 11 &nbsp;·&nbsp; needs the WebView2 runtime, which Windows 11 already has<br>
+          Free and open source &nbsp;·&nbsp; no account required to use it
+        </div>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <a class="brand" href="#top" style="margin-right:auto; font-size:15px">
+      <img src="logo.svg" alt="">
+      Playdex
+    </a>
+    <a href="https://github.com/Woblu/Playdex">GitHub</a>
+    <a href="https://github.com/Woblu/Playdex/releases">Releases</a>
+    <a href="https://github.com/Woblu/Playdex/issues">Report a problem</a>
+    <p class="scope">
+      Playdex organises and launches games you already own and already have on
+      disk. It does not find, download or supply games, and nothing is bundled
+      with it. All artwork it displays comes from metadata databases and belongs
+      to the people who made those games.
+    </p>
+  </div>
+</footer>
+
+<script>
+  // The nav only grows a border once it is actually sitting over content.
+  var nav = document.getElementById("nav");
+  var onScroll = function () {
+    nav.classList.toggle("stuck", window.scrollY > 12);
+  };
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+</script>
+
+</body>
+</html>
