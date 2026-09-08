@@ -153,6 +153,14 @@ fn migrate(conn: &Connection) -> Result<()> {
         ("base_game_id", "INTEGER REFERENCES games(id) ON DELETE CASCADE"),
         ("patch_path", "TEXT"),
         ("patch_format", "TEXT"),
+        // A per-game emulator, overriding the one set for its system.
+        ("emu_mode", "TEXT"),
+        ("emu_core", "TEXT"),
+        ("emu_command", "TEXT"),
+        // Multi-disc grouping: which playlist a disc belongs to, and whether
+        // this row is the playlist standing in for a set of them.
+        ("disc_playlist_id", "INTEGER"),
+        ("is_disc_playlist", "INTEGER NOT NULL DEFAULT 0"),
     ] {
         let mut stmt = conn.prepare("PRAGMA table_info(games)")?;
         let existing: Vec<String> = stmt
@@ -320,8 +328,13 @@ pub fn get_game(conn: &Connection, id: i64) -> Result<Option<Game>> {
 
 /// Games that still need metadata, oldest first.
 pub fn games_needing_scrape(conn: &Connection, platform: Option<&str>) -> Result<Vec<Game>> {
+    // A disc folded into a multi-disc entry is not shown anywhere, so
+    // fetching metadata for it would spend a scraper lookup - and on
+    // ScreenScraper, part of a daily quota - on something nobody will see.
+    // The playlist standing for the set is scraped instead.
     let mut sql = format!(
-        "SELECT {GAME_COLS} FROM games WHERE scrape_status IN ('pending', 'error')"
+        "SELECT {GAME_COLS} FROM games
+         WHERE scrape_status IN ('pending', 'error') AND disc_playlist_id IS NULL"
     );
     let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
     if let Some(p) = platform.filter(|p| !p.is_empty()) {
@@ -437,14 +450,6 @@ pub fn record_play(conn: &Connection, id: i64, started_at: i64, seconds: i64) ->
         params![id, seconds, started_at + seconds],
     )?;
     Ok(())
-}
-
-pub fn game_id_by_path(conn: &Connection, path: &str) -> Result<Option<i64>> {
-    Ok(conn
-        .query_row("SELECT id FROM games WHERE path = ?1", params![path], |r| {
-            r.get(0)
-        })
-        .optional()?)
 }
 
 /// What a scan needs to know about the rows already in the library: enough to
@@ -646,6 +651,158 @@ pub fn set_emulator(conn: &Connection, cfg: &EmulatorConfig) -> Result<()> {
             core = excluded.core,
             custom_command = excluded.custom_command",
         params![cfg.platform, cfg.mode, cfg.core, cfg.custom_command],
+    )?;
+    Ok(())
+}
+
+// ------------------------------------------------------------ multi-disc
+
+/// Every entry that could be one disc of a set: the real games, not the
+/// playlists that already stand for them.
+pub fn disc_candidates(conn: &Connection) -> Result<Vec<Game>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {GAME_COLS} FROM games WHERE is_disc_playlist = 0 ORDER BY path"
+    ))?;
+    let rows = stmt.query_map([], row_to_game)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// The playlists standing in for disc sets.
+pub fn disc_playlists(conn: &Connection) -> Result<Vec<Game>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {GAME_COLS} FROM games WHERE is_disc_playlist = 1 ORDER BY path"
+    ))?;
+    let rows = stmt.query_map([], row_to_game)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// The discs one playlist covers, in the order they are listed.
+pub fn disc_members(conn: &Connection, playlist_id: i64) -> Result<Vec<Game>> {
+    let mut stmt = conn.prepare(&format!(
+        "SELECT {GAME_COLS} FROM games WHERE disc_playlist_id = ?1 ORDER BY path"
+    ))?;
+    let rows = stmt.query_map(params![playlist_id], row_to_game)?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
+}
+
+/// Break every disc set apart, ready to be rebuilt from what is on disk now.
+/// The discs come back into view; nothing on disk is touched.
+pub fn release_all_discs(conn: &Connection) -> Result<()> {
+    conn.execute(
+        "UPDATE games SET disc_playlist_id = NULL, hidden = 0
+         WHERE disc_playlist_id IS NOT NULL",
+        [],
+    )?;
+    Ok(())
+}
+
+/// Record the playlist for a disc set, keeping the row it already had so its
+/// play time, favourite mark and artwork survive a rescan.
+pub fn upsert_disc_playlist(
+    conn: &Connection,
+    path: &str,
+    filename: &str,
+    platform: &str,
+    title: &str,
+    size: i64,
+) -> Result<i64> {
+    conn.execute(
+        "INSERT INTO games (path, filename, platform, title, size, added_at, is_disc_playlist)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, 1)
+         ON CONFLICT(path) DO UPDATE SET
+             filename = excluded.filename,
+             platform = excluded.platform,
+             size     = excluded.size,
+             is_disc_playlist = 1",
+        params![path, filename, platform, title, size, now()],
+    )?;
+    Ok(conn.query_row(
+        "SELECT id FROM games WHERE path = ?1",
+        params![path],
+        |r| r.get(0),
+    )?)
+}
+
+/// Put these discs under a playlist and take them out of the library view.
+/// They are hidden rather than deleted: the files are yours, and "Show
+/// hidden" brings them straight back.
+pub fn set_disc_members(conn: &Connection, playlist_id: i64, ids: &[i64]) -> Result<()> {
+    for id in ids {
+        conn.execute(
+            "UPDATE games SET disc_playlist_id = ?2, hidden = 1 WHERE id = ?1",
+            params![id, playlist_id],
+        )?;
+    }
+    Ok(())
+}
+
+/// Give a playlist the metadata one of its discs already has, so a set that
+/// was scraped before it was grouped does not come back blank.
+pub fn copy_metadata(conn: &Connection, from: i64, to: i64) -> Result<()> {
+    conn.execute(
+        "UPDATE games SET
+             description   = src.description,
+             developer     = src.developer,
+             publisher     = src.publisher,
+             genre         = src.genre,
+             release_date  = src.release_date,
+             players       = src.players,
+             rating        = src.rating,
+             region        = src.region,
+             cover_path    = src.cover_path,
+             screenshot_path = src.screenshot_path,
+             logo_path     = src.logo_path,
+             scrape_status = src.scrape_status,
+             scrape_source = src.scrape_source
+         FROM (SELECT * FROM games WHERE id = ?1) AS src
+         WHERE games.id = ?2 AND games.scrape_status <> 'ok'",
+        params![from, to],
+    )?;
+    Ok(())
+}
+
+/// The emulator set for one game in particular, if it has one.
+///
+/// Systems mostly want one emulator, which is why the setting lives on the
+/// system. But "mostly" is not "always": one game in a system can need a
+/// different core to run at all, and before this the only way to give it one
+/// was to change the setting for every game beside it.
+pub fn game_emulator(conn: &Connection, id: i64) -> Result<Option<EmulatorConfig>> {
+    let row = conn
+        .query_row(
+            "SELECT platform, emu_mode, emu_core, emu_command FROM games WHERE id = ?1",
+            params![id],
+            |r| {
+                Ok((
+                    r.get::<_, String>(0)?,
+                    r.get::<_, Option<String>>(1)?,
+                    r.get::<_, Option<String>>(2)?,
+                    r.get::<_, Option<String>>(3)?,
+                ))
+            },
+        )
+        .optional()?;
+
+    Ok(row.and_then(|(platform, mode, core, command)| {
+        mode.map(|mode| EmulatorConfig {
+            platform,
+            mode,
+            core,
+            custom_command: command,
+        })
+    }))
+}
+
+/// Set or clear one game's own emulator. `None` returns it to its system's.
+pub fn set_game_emulator(conn: &Connection, id: i64, cfg: Option<&EmulatorConfig>) -> Result<()> {
+    conn.execute(
+        "UPDATE games SET emu_mode = ?2, emu_core = ?3, emu_command = ?4 WHERE id = ?1",
+        params![
+            id,
+            cfg.map(|c| c.mode.as_str()),
+            cfg.and_then(|c| c.core.as_deref()),
+            cfg.and_then(|c| c.custom_command.as_deref()),
+        ],
     )?;
     Ok(())
 }

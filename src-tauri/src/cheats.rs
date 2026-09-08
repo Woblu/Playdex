@@ -596,7 +596,9 @@ pub fn sync_to_retroarch(conn: &rusqlite::Connection, game: &Game) -> Result<Opt
         .ok_or_else(|| AppError::Other("Set the RetroArch path in Settings first".into()))?;
     let exe = PathBuf::from(&retroarch);
 
-    let core = crate::launch::resolve_config(conn, &game.platform)
+    // Cheats are filed under the core that runs the game, so this has to be
+    // the core that will actually run it - the game's own where it has one.
+    let core = crate::launch::resolve_for_game(conn, game)
         .core
         .filter(|c| !c.is_empty())
         .ok_or_else(|| {

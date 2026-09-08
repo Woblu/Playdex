@@ -2,6 +2,7 @@ mod cheats;
 mod commands;
 mod dats;
 mod db;
+mod discs;
 mod detect;
 mod error;
 mod hacks;
@@ -169,6 +170,9 @@ pub fn run() {
             commands::list_emulators,
             commands::save_emulator,
             commands::effective_emulator,
+            commands::disc_members,
+            commands::game_emulator,
+            commands::save_game_emulator,
             commands::inspect_patch,
             commands::add_hack,
             commands::apply_catalog_patch,

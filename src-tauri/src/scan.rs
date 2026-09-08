@@ -2,7 +2,7 @@
 //! hash them, and record them in the library.
 
 use std::path::{Path, PathBuf};
-use tauri::{AppHandle, Emitter};
+use tauri::{AppHandle, Emitter, Manager};
 use walkdir::WalkDir;
 
 use crate::db;
@@ -197,6 +197,8 @@ pub struct ScanTally {
     pub dropped: usize,
     /// Files that were not games at all.
     pub ignored: usize,
+    /// Multi-disc games gathered into a single entry.
+    pub disc_sets: usize,
     reasons: Vec<String>,
 }
 
@@ -224,6 +226,13 @@ impl ScanTally {
         }
         if self.dropped > 0 {
             out.push_str(&format!(", dropped {}", self.dropped));
+        }
+        if self.disc_sets > 0 {
+            out.push_str(&format!(
+                ", grouped {} multi-disc game{}",
+                self.disc_sets,
+                if self.disc_sets == 1 { "" } else { "s" }
+            ));
         }
         out
     }
@@ -444,37 +453,6 @@ pub struct DropTally {
     pub reasons: Vec<String>,
 }
 
-impl DropTally {
-    pub fn message(&self) -> String {
-        let mut parts = Vec::new();
-        if self.folders > 0 {
-            parts.push(format!(
-                "Added {} folder{}",
-                self.folders,
-                if self.folders == 1 { "" } else { "s" }
-            ));
-        }
-        if self.added > 0 {
-            parts.push(format!(
-                "Added {} game{}",
-                self.added,
-                if self.added == 1 { "" } else { "s" }
-            ));
-        }
-        if self.skipped > 0 {
-            parts.push(format!("{} already in your library", self.skipped));
-        }
-        if self.ignored > 0 {
-            parts.push(format!("{} not a game", self.ignored));
-        }
-        if parts.is_empty() {
-            "Nothing to add".to_string()
-        } else {
-            parts.join(", ")
-        }
-    }
-}
-
 /// Take files and folders dropped onto the window and put them in the library.
 ///
 /// A dropped file is indexed where it lies rather than copied anywhere. It is
@@ -690,6 +668,20 @@ pub fn scan_all(
         }
     }
 
+    // Now that the library is settled, gather any multi-disc games into one
+    // entry each. This runs over the whole library rather than only what was
+    // just added, because a set is only a set once its second disc arrives.
+    if let Some(state) = app.try_state::<crate::AppState>() {
+        let root = state.media_root.join("playlists");
+        let conn = db_handle.lock().unwrap();
+        match crate::discs::regroup(&conn, &root) {
+            Ok(grouped) => tally.disc_sets = grouped.sets,
+            // Grouping is a convenience laid over a library that is already
+            // correct, so a failure here is not a failure of the scan.
+            Err(e) => eprintln!("disc grouping failed: {e}"),
+        }
+    }
+
     let message = tally.message();
     emit(app, "done", total, total, &message, &tally, true);
 
@@ -874,6 +866,47 @@ mod tests {
 ");
 
         assert_eq!(detect_platform(&cue, &root, None), "dreamcast");
+        let _ = std::fs::remove_dir_all(&root);
+    }
+
+    /// A bare `.bin` with no cue sheet beside it. Nothing in its name or its
+    /// folder says PlayStation, and `.bin` belongs to half a dozen systems,
+    /// so before the raw-track reader this landed in Unidentified.
+    #[test]
+    fn a_bare_bin_track_is_read_as_the_disc_it_is() {
+        let root = scratch("barebin");
+
+        // A minimal ISO 9660 filesystem, wrapped as a raw Mode 1 CD track.
+        const SEC: usize = 2048;
+        let mut iso = vec![0u8; SEC * 20];
+        iso[16 * SEC] = 1;
+        iso[16 * SEC + 1..16 * SEC + 6].copy_from_slice(b"CD001");
+        let r = 16 * SEC + 156;
+        iso[r] = 34;
+        iso[r + 2..r + 6].copy_from_slice(&17u32.to_le_bytes());
+        iso[r + 10..r + 14].copy_from_slice(&(SEC as u32).to_le_bytes());
+        let name = b"SYSTEM.CNF;1";
+        let rec_len = 33 + name.len() + 1;
+        let mut rec = vec![0u8; rec_len];
+        rec[0] = rec_len as u8;
+        rec[2..6].copy_from_slice(&18u32.to_le_bytes());
+        rec[10..14].copy_from_slice(&37u32.to_le_bytes());
+        rec[32] = name.len() as u8;
+        rec[33..33 + name.len()].copy_from_slice(name);
+        iso[17 * SEC..17 * SEC + rec.len()].copy_from_slice(&rec);
+        iso[18 * SEC..18 * SEC + 37]
+            .copy_from_slice(b"BOOT2 = cdrom0:SLUS_203.12;1 VER=1.00");
+
+        let mut raw = Vec::new();
+        for chunk in iso.chunks(SEC) {
+            let mut sector = vec![0u8; 2352];
+            sector[16..16 + chunk.len()].copy_from_slice(chunk);
+            raw.extend_from_slice(&sector);
+        }
+
+        let bin = root.join("Sonic Riders.bin");
+        put(&bin, &raw);
+        assert_eq!(detect_platform(&bin, &root, None), "ps2");
         let _ = std::fs::remove_dir_all(&root);
     }
 

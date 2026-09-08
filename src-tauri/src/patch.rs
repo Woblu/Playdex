@@ -34,8 +34,6 @@ pub struct PatchInfo {
     /// CRC32 of the ROM this patch expects. IPS carries no checksum.
     pub source_crc: Option<u32>,
     pub target_crc: Option<u32>,
-    pub source_size: Option<u64>,
-    pub target_size: Option<u64>,
 }
 
 pub fn detect_format(patch: &[u8]) -> Option<Format> {
@@ -66,8 +64,6 @@ pub fn inspect(patch: &[u8]) -> Result<PatchInfo> {
             format,
             source_crc: None,
             target_crc: None,
-            source_size: None,
-            target_size: None,
         }),
         Format::Ups | Format::Bps => {
             if patch.len() < 16 {
@@ -77,16 +73,18 @@ pub fn inspect(patch: &[u8]) -> Result<PatchInfo> {
             let source_crc = u32::from_le_bytes([footer[0], footer[1], footer[2], footer[3]]);
             let target_crc = u32::from_le_bytes([footer[4], footer[5], footer[6], footer[7]]);
 
+            // The two sizes follow the magic. Nothing here needs them -
+            // apply_ups and apply_bps read and check them against the real
+            // ROM themselves - but reading them proves the header is whole,
+            // so a truncated patch is caught before it is offered.
             let mut cursor = 4usize;
-            let source_size = read_varint(patch, &mut cursor)?;
-            let target_size = read_varint(patch, &mut cursor)?;
+            read_varint(patch, &mut cursor)?;
+            read_varint(patch, &mut cursor)?;
 
             Ok(PatchInfo {
                 format,
                 source_crc: Some(source_crc),
                 target_crc: Some(target_crc),
-                source_size: Some(source_size),
-                target_size: Some(target_size),
             })
         }
     }

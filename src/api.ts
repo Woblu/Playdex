@@ -185,6 +185,18 @@ export const saveEmulator = (config: EmulatorConfig) =>
 export const effectiveEmulator = (platform: string) =>
   invoke<EmulatorConfig>("effective_emulator", { platform });
 
+/** The discs a multi-disc entry stands for. Empty for an ordinary game. */
+export const discMembers = (id: number) =>
+  invoke<Game[]>("disc_members", { id });
+
+/** One game's own emulator, or null when it just uses its system's. */
+export const gameEmulator = (id: number) =>
+  invoke<EmulatorConfig | null>("game_emulator", { id });
+
+/** Pass null to hand the game back to its system's emulator. */
+export const saveGameEmulator = (id: number, config: EmulatorConfig | null) =>
+  invoke<void>("save_game_emulator", { id, config });
+
 // --------------------------------------------------------------- media
 
 /** Cached artwork is served over our own `media://` protocol. */

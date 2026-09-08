@@ -4,6 +4,7 @@ import * as api from "../api";
 import { artUrl, formatDate, formatPlaytime, formatSize } from "../api";
 import type {
   Cheat,
+  EmulatorConfig,
   SaveEntry,
   Game,
   HackPreview,
@@ -50,6 +51,11 @@ export default function GameDetail({
   const isArchived = /\.(zip|7z)$/i.test(game.path);
   const [command, setCommand] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
+  /** This game's own emulator, when it has been given one. */
+  const [emu, setEmu] = useState<EmulatorConfig | null>(null);
+  /** The discs behind a multi-disc entry. Empty for an ordinary game. */
+  const [discs, setDiscs] = useState<Game[]>([]);
+  const [emuOpen, setEmuOpen] = useState(false);
   const [scrapeNote, setScrapeNote] = useState<string | null>(null);
 
   const [patchPath, setPatchPath] = useState<string | null>(null);
@@ -246,7 +252,24 @@ export default function GameDetail({
     setSaveNote(null);
     setSaveError(null);
     api.listSaves(game.id).then(setSaves).catch(() => setSaves([]));
+    setEmuOpen(false);
+    api.gameEmulator(game.id).then(setEmu).catch(() => setEmu(null));
+    api.discMembers(game.id).then(setDiscs).catch(() => setDiscs([]));
   }, [game.id, game.platform]);
+
+  /// Saving re-previews the command, so the line under it is what will run
+  /// rather than what would have run a moment ago.
+  const saveEmu = async (next: EmulatorConfig | null) => {
+    setEmu(next);
+    try {
+      await api.saveGameEmulator(game.id, next);
+      setCommandError(null);
+      setCommand(await api.previewLaunch(game.id));
+    } catch (e) {
+      setCommandError(api.errorMessage(e));
+      setCommand(null);
+    }
+  };
 
   const hero = artUrl(game.screenshotPath) ?? artUrl(game.coverPath);
 
@@ -338,6 +361,22 @@ export default function GameDetail({
           Changing the system re-queues this game for metadata and picks a
           different core.
         </div>
+
+        {discs.length > 0 && (
+          <>
+            <div className="section-title">Discs</div>
+            <div className="hint">
+              {discs.length} discs, played as one game. The emulator swaps
+              between them itself when the game asks, so there is nothing to
+              load by hand.
+            </div>
+            {discs.map((d, i) => (
+              <div className="path-box" style={{ marginTop: 6 }} key={d.id}>
+                {i + 1}. {d.filename}
+              </div>
+            ))}
+          </>
+        )}
 
         <div className="section-title">File</div>
         <div className="path-box">{game.path}</div>
@@ -435,6 +474,118 @@ export default function GameDetail({
           <>
             <div className="section-title">Launch command</div>
             <div className="path-box">{command}</div>
+          </>
+        )}
+
+        <div className="section-title">Emulator</div>
+        {emu ? (
+          <>
+            <div className="row">
+              <select
+                className="select-inline"
+                value={emu.mode}
+                onChange={(e) =>
+                  void saveEmu({
+                    ...emu,
+                    mode: e.target.value as "retroarch" | "custom",
+                  })
+                }
+              >
+                <option value="retroarch">RetroArch</option>
+                <option value="custom">Standalone</option>
+              </select>
+
+              {emu.mode === "retroarch" ? (
+                <input
+                  value={emu.core ?? ""}
+                  placeholder="core name"
+                  onChange={(e) => void saveEmu({ ...emu, core: e.target.value })}
+                />
+              ) : (
+                <>
+                  <input
+                    value={emu.customCommand ?? ""}
+                    placeholder={'"C:\Emu\emulator.exe" "{rom}"'}
+                    onChange={(e) =>
+                      void saveEmu({ ...emu, customCommand: e.target.value })
+                    }
+                  />
+                  <button
+                    className="btn small"
+                    onClick={async () => {
+                      const exe = await api.pickFile();
+                      if (!exe) return;
+                      void saveEmu({
+                        ...emu,
+                        customCommand: `"${exe}" "{rom}"`,
+                      });
+                    }}
+                  >
+                    Browse
+                  </button>
+                </>
+              )}
+            </div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <button className="btn small" onClick={() => void saveEmu(null)}>
+                Use the {api.platformName(allPlatforms, game.platform)} default
+              </button>
+            </div>
+            <div className="hint" style={{ marginTop: 6 }}>
+              This game only. Cheats and saves follow it, since RetroArch files
+              both under whichever core runs the game.
+            </div>
+          </>
+        ) : emuOpen ? (
+          <>
+            <div className="hint">
+              Pick what should run this one game.
+            </div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <button
+                className="btn small"
+                onClick={() =>
+                  void saveEmu({
+                    platform: game.platform,
+                    mode: "retroarch",
+                    core: "",
+                    customCommand: null,
+                  })
+                }
+              >
+                RetroArch core
+              </button>
+              <button
+                className="btn small"
+                onClick={async () => {
+                  const exe = await api.pickFile();
+                  if (!exe) return;
+                  void saveEmu({
+                    platform: game.platform,
+                    mode: "custom",
+                    core: null,
+                    customCommand: `"${exe}" "{rom}"`,
+                  });
+                }}
+              >
+                Browse for an emulator
+              </button>
+              <button className="btn small" onClick={() => setEmuOpen(false)}>
+                Cancel
+              </button>
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="hint">
+              Running on whatever{" "}
+              {api.platformName(allPlatforms, game.platform)} is set to use.
+            </div>
+            <div className="row" style={{ marginTop: 6 }}>
+              <button className="btn small" onClick={() => setEmuOpen(true)}>
+                Use a different emulator for this game
+              </button>
+            </div>
           </>
         )}
 

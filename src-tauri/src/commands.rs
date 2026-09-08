@@ -334,7 +334,7 @@ pub fn preview_launch(app: AppHandle, db: State<Db>, id: i64) -> Result<String> 
         .map(|p| crate::detect::clean_path(&p))
         .filter(|p| !p.is_empty())
         .and_then(|p| {
-            let core = launch::resolve_config(&conn, &game.platform).core?;
+            let core = launch::resolve_for_game(&conn, &game).core?;
             launch::core_extensions(std::path::Path::new(&p), &core)
         });
     let rom = launch::preview_rom_path(&game, &cache_root, accepts.as_deref());
@@ -417,6 +417,30 @@ pub fn save_emulator(db: State<Db>, config: EmulatorConfig) -> Result<()> {
 pub fn effective_emulator(db: State<Db>, platform: String) -> Result<EmulatorConfig> {
     let conn = db.0.lock().unwrap();
     Ok(launch::resolve_config(&conn, &platform))
+}
+
+/// The discs a multi-disc entry stands for, in playing order. Empty for an
+/// ordinary game, which is nearly all of them.
+#[tauri::command]
+pub fn disc_members(db: State<Db>, id: i64) -> Result<Vec<Game>> {
+    let conn = db.0.lock().unwrap();
+    db::disc_members(&conn, id)
+}
+
+/// One game's own emulator, or `None` when it just uses its system's.
+#[tauri::command]
+pub fn game_emulator(db: State<Db>, id: i64) -> Result<Option<EmulatorConfig>> {
+    let conn = db.0.lock().unwrap();
+    db::game_emulator(&conn, id)
+}
+
+/// Give one game its own emulator, or pass `null` to hand it back to its
+/// system's. Everything that runs or previews a launch reads this, and so do
+/// cheats and saves, which are filed under whichever core actually runs.
+#[tauri::command]
+pub fn save_game_emulator(db: State<Db>, id: i64, config: Option<EmulatorConfig>) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::set_game_emulator(&conn, id, config.as_ref())
 }
 
 // --------------------------------------------------------------- hacks
@@ -1022,7 +1046,7 @@ pub fn list_saves(db: State<Db>, game_id: i64) -> Result<Vec<SaveEntry>> {
     let game = db::get_game(&conn, game_id)?
         .ok_or_else(|| AppError::Other("Game not found".into()))?;
     let exe = retroarch_exe(&conn)?;
-    let core = launch::resolve_config(&conn, &game.platform)
+    let core = launch::resolve_for_game(&conn, &game)
         .core
         .unwrap_or_default();
     let folder = crate::cheats::core_folder_name(&core);
@@ -1043,7 +1067,7 @@ pub fn back_up_saves(state: State<AppState>, db: State<Db>, game_id: i64) -> Res
         let game = db::get_game(&conn, game_id)?
             .ok_or_else(|| AppError::Other("Game not found".into()))?;
         let exe = retroarch_exe(&conn)?;
-        let core = launch::resolve_config(&conn, &game.platform)
+        let core = launch::resolve_for_game(&conn, &game)
             .core
             .unwrap_or_default();
         let folder = crate::cheats::core_folder_name(&core);

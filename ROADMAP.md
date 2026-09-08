@@ -5,26 +5,19 @@ have shipped; the version they shipped in is in brackets.
 
 ## Now
 
-- [ ] **Multi-disc games as one entry.** A PS1 game split across three
-      discs shows up as three games. Group them by title, write an `.m3u`,
-      and let the emulator swap discs itself.
-- [ ] **Detect raw `.bin` / `.cue` dumps.** A bare `.bin` with no sibling
-      `.cue` currently lands in Unidentified. The sector layout says what
-      it is; read it the way `signature.rs` already reads ISO 9660.
-- [ ] **Per-game emulator override.** One game in a system needs a
-      different core or a standalone emulator, and right now the only way
-      is to change the setting for everything.
-- [ ] **Clear the four build warnings.** Deprecated `unescape_value`, dead
-      `game_id_by_path`, dead `DropTally::message`.
-
-## Next
-
 - [ ] **Playlists and collections.** Hand-picked lists that cut across
       systems - "beat these", "co-op", "for the kids".
 - [ ] **Show the artwork we already have.** The scraper fetches
       title-screen and in-game shots and nothing displays them.
-- [ ] **Frontend tests.** 5,868 lines of TypeScript, no tests. The Rust
-      side has 81.
+- [ ] **Frontend tests.** 5,900 lines of TypeScript, no tests. The Rust
+      side has 93.
+
+## Next
+
+- [ ] **Per-game emulator arguments.** The override takes a whole command;
+      sometimes all you want is one extra flag on the system's.
+- [ ] **Read a `.cue` sheet's own track list** rather than only the files
+      it names, so a multi-track disc reports its real size.
 
 ## Later
 
@@ -38,6 +31,11 @@ have shipped; the version they shipped in is in brackets.
 
 ## Done
 
+- [x] Multi-disc games gathered into one entry, with an `.m3u` the emulator
+      swaps discs from [0.8.0]
+- [x] Raw `.bin` tracks read as the discs they are, with no `.cue` needed
+      [0.8.0]
+- [x] Per-game emulator override, which cheats and saves follow [0.8.0]
 - [x] Adding a folder in Settings scans it, the way dropping one already
       did [0.7.2]
 - [x] Smooth scrolling on the console skin [0.7.1]

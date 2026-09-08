@@ -58,17 +58,38 @@ fn core_filename(core: &str) -> String {
     }
 }
 
+/// Whether a stored config says enough to run anything: a core for RetroArch,
+/// a command for a standalone emulator. A half-filled one is not an answer,
+/// and falling through to the next source beats failing at launch.
+fn is_usable(cfg: &EmulatorConfig) -> bool {
+    let has_core = cfg.core.as_deref().map(|c| !c.is_empty()).unwrap_or(false);
+    let has_cmd = cfg
+        .custom_command
+        .as_deref()
+        .map(|c| !c.is_empty())
+        .unwrap_or(false);
+    (cfg.mode == "custom" && has_cmd) || (cfg.mode == "retroarch" && has_core)
+}
+
+/// The emulator to run one game with: its own if it has been given one, then
+/// its system's, then RetroArch with the system's preferred core.
+///
+/// Everything that launches or previews a launch goes through here, so a
+/// per-game override applies to the command shown as well as the one run.
+pub fn resolve_for_game(conn: &rusqlite::Connection, game: &Game) -> EmulatorConfig {
+    if let Ok(Some(cfg)) = db::game_emulator(conn, game.id) {
+        if is_usable(&cfg) {
+            return cfg;
+        }
+    }
+    resolve_config(conn, &game.platform)
+}
+
 /// The emulator configured for a platform, falling back to RetroArch with the
 /// platform's preferred core.
 pub fn resolve_config(conn: &rusqlite::Connection, platform: &str) -> EmulatorConfig {
     if let Ok(Some(cfg)) = db::get_emulator(conn, platform) {
-        let has_core = cfg.core.as_deref().map(|c| !c.is_empty()).unwrap_or(false);
-        let has_cmd = cfg
-            .custom_command
-            .as_deref()
-            .map(|c| !c.is_empty())
-            .unwrap_or(false);
-        if (cfg.mode == "custom" && has_cmd) || (cfg.mode == "retroarch" && has_core) {
+        if is_usable(&cfg) {
             return cfg;
         }
     }
@@ -400,7 +421,7 @@ pub fn build_command(
     game: &Game,
     rom_path: &str,
 ) -> Result<(String, Vec<String>)> {
-    let cfg = resolve_config(conn, &game.platform);
+    let cfg = resolve_for_game(conn, game);
 
     if cfg.mode == "custom" {
         let template = cfg
@@ -503,7 +524,7 @@ pub fn launch(
             .map(|p| crate::detect::clean_path(&p))
             .filter(|p| !p.is_empty())
             .and_then(|p| {
-                let core = resolve_config(&guard, &game.platform).core?;
+                let core = resolve_for_game(&guard, game).core?;
                 core_extensions(Path::new(&p), &core)
             });
         let rom = playable_path(game, cache_root, accepts.as_deref())?;
@@ -585,6 +606,76 @@ mod tests {
         ));
         std::fs::create_dir_all(&dir).unwrap();
         dir
+    }
+
+    /// A game with its own emulator uses it; one without falls back to its
+    /// system's; and a half-filled override - RetroArch mode with no core
+    /// named - is not an answer, so it falls back too rather than failing at
+    /// launch.
+    #[test]
+    fn a_games_own_emulator_beats_its_systems() {
+        let dir = tmp("override");
+        let conn = crate::db::open(&dir.join("test.db")).unwrap();
+        conn.execute(
+            "INSERT INTO games (id, path, filename, platform, title, added_at)
+             VALUES (1, 'C:/roms/a.iso', 'a.iso', 'ps2', 'A', 0)",
+            [],
+        )
+        .unwrap();
+        let game = crate::db::get_game(&conn, 1).unwrap().unwrap();
+
+        crate::db::set_emulator(
+            &conn,
+            &EmulatorConfig {
+                platform: "ps2".into(),
+                mode: "custom".into(),
+                core: None,
+                custom_command: Some("\"C:/pcsx2.exe\" \"{rom}\"".into()),
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            resolve_for_game(&conn, &game).custom_command.as_deref(),
+            Some("\"C:/pcsx2.exe\" \"{rom}\""),
+            "with no override, the system's emulator stands"
+        );
+
+        crate::db::set_game_emulator(
+            &conn,
+            1,
+            Some(&EmulatorConfig {
+                platform: "ps2".into(),
+                mode: "retroarch".into(),
+                core: Some("pcsx_rearmed".into()),
+                custom_command: None,
+            }),
+        )
+        .unwrap();
+        let cfg = resolve_for_game(&conn, &game);
+        assert_eq!(cfg.mode, "retroarch");
+        assert_eq!(cfg.core.as_deref(), Some("pcsx_rearmed"));
+
+        // Named RetroArch but no core: says nothing, so the system answers.
+        crate::db::set_game_emulator(
+            &conn,
+            1,
+            Some(&EmulatorConfig {
+                platform: "ps2".into(),
+                mode: "retroarch".into(),
+                core: None,
+                custom_command: None,
+            }),
+        )
+        .unwrap();
+        assert_eq!(resolve_for_game(&conn, &game).mode, "custom");
+
+        // And clearing it puts the game back on its system's emulator.
+        crate::db::set_game_emulator(&conn, 1, None).unwrap();
+        assert!(crate::db::game_emulator(&conn, 1).unwrap().is_none());
+        assert_eq!(resolve_for_game(&conn, &game).mode, "custom");
+
+        drop(conn);
+        let _ = std::fs::remove_dir_all(&dir);
     }
 
     fn game_at(path: &Path, inner: Option<&str>) -> Game {

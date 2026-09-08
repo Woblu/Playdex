@@ -42,12 +42,18 @@ pub const SIGNATURES: &[Signature] = &[
     Signature { offset: 0x1C, magic: &[0xC2, 0x33, 0x9F, 0x3D], platform: "gamecube" },
     Signature { offset: 0x21C, magic: &[0xC2, 0x33, 0x9F, 0x3D], platform: "gamecube" },
     // --- Sega
+    // Three offsets each: 0 for a plain image, 0x10 where a raw Mode 1 track
+    // puts the start of its user data, and 0x18 for Mode 2 Form 1, which has
+    // a further 8-byte subheader in front.
     Signature { offset: 0, magic: b"SEGADISCSYSTEM", platform: "segacd" },
     Signature { offset: 0x10, magic: b"SEGADISCSYSTEM", platform: "segacd" },
+    Signature { offset: 0x18, magic: b"SEGADISCSYSTEM", platform: "segacd" },
     Signature { offset: 0, magic: b"SEGA SEGASATURN", platform: "saturn" },
     Signature { offset: 0x10, magic: b"SEGA SEGASATURN", platform: "saturn" },
+    Signature { offset: 0x18, magic: b"SEGA SEGASATURN", platform: "saturn" },
     Signature { offset: 0, magic: b"SEGA SEGAKATANA", platform: "dreamcast" },
     Signature { offset: 0x10, magic: b"SEGA SEGAKATANA", platform: "dreamcast" },
+    Signature { offset: 0x18, magic: b"SEGA SEGAKATANA", platform: "dreamcast" },
     Signature { offset: 0x100, magic: b"SEGA MEGA DRIVE", platform: "genesis" },
     Signature { offset: 0x100, magic: b"SEGA GENESIS", platform: "genesis" },
     Signature { offset: 0x100, magic: b"SEGA 32X", platform: "sega32x" },
@@ -73,10 +79,72 @@ pub fn identify(path: &Path) -> Option<&'static str> {
 
 // ------------------------------------------------------------- ISO 9660
 
-/// Where an ISO 9660 image keeps its volume descriptor, and how big a sector
-/// is in one.
-const SECTOR: u64 = 2048;
+/// The user data in one sector of an ISO 9660 filesystem, whatever the image
+/// wraps it in.
+const DATA: usize = 2048;
+
+/// Where an ISO 9660 image keeps its volume descriptor.
 const PVD_SECTOR: u64 = 16;
+
+/// How an image lays its sectors out on disk.
+///
+/// A CD sector holds 2048 bytes of the filesystem and, on the disc itself,
+/// several hundred more of sync marks, addressing and error correction. An
+/// `.iso` is the filesystem with all of that stripped away, so its sectors are
+/// 2048 bytes and start where the data starts. A raw `.bin` track keeps the
+/// lot, so its sectors are 2352 bytes and the data begins part way in - after
+/// 16 bytes in Mode 1, or 24 in Mode 2 Form 1, which carries a subheader as
+/// well. A dump taken with subchannel data appended runs to 2448.
+struct Layout {
+    sector: u64,
+    data: u64,
+}
+
+/// Tried in order. `.iso` first because it is the common case, and the
+/// candidates are distinguished by whether `CD001` turns up where they say it
+/// should, so a wrong guess simply fails to match.
+const LAYOUTS: &[Layout] = &[
+    Layout { sector: 2048, data: 0 },
+    Layout { sector: 2352, data: 16 },
+    Layout { sector: 2352, data: 24 },
+    Layout { sector: 2448, data: 16 },
+    Layout { sector: 2448, data: 24 },
+];
+
+/// Read one sector's worth of filesystem out of an image.
+fn read_sector(file: &mut std::fs::File, layout: &Layout, lba: u64) -> Option<Vec<u8>> {
+    let mut buf = vec![0u8; DATA];
+    file.seek(SeekFrom::Start(lba * layout.sector + layout.data))
+        .ok()?;
+    file.read_exact(&mut buf).ok()?;
+    Some(buf)
+}
+
+/// Read `len` bytes starting at a sector, across as many sectors as it takes.
+///
+/// An `.iso` could do this in one read, since its sectors are the data and
+/// nothing else. A raw track cannot: every 2048 bytes of filesystem has a
+/// few hundred bytes of sync and error correction bolted around it, so the
+/// pieces have to be gathered one sector at a time.
+fn read_extent(file: &mut std::fs::File, layout: &Layout, lba: u64, len: usize) -> Option<Vec<u8>> {
+    let mut out = Vec::with_capacity(len);
+    let sectors = len.div_ceil(DATA) as u64;
+    for i in 0..sectors {
+        out.extend_from_slice(&read_sector(file, layout, lba + i)?);
+    }
+    out.truncate(len);
+    Some(out)
+}
+
+/// The layout an image is in, judged by where its primary volume descriptor
+/// turns up: descriptor type 1 followed by the standard identifier.
+fn layout_of(file: &mut std::fs::File) -> Option<&'static Layout> {
+    LAYOUTS.iter().find(|layout| {
+        read_sector(file, layout, PVD_SECTOR)
+            .map(|pvd| pvd[0] == 1 && &pvd[1..6] == b"CD001")
+            .unwrap_or(false)
+    })
+}
 
 /// Identify a disc image by reading its filesystem.
 ///
@@ -89,22 +157,15 @@ const PVD_SECTOR: u64 = 16;
 ///
 /// So the disc's own directory is read: the volume descriptor at sector 16,
 /// the root directory it points at, and then the one small file that answers
-/// the question. Three short reads, wherever the image happens to be on disk.
+/// the question. A handful of short reads, wherever the image is on disk.
 ///
-/// Only images with 2048-byte sectors are understood, which is what `.iso`
-/// means. A raw `.bin` track uses 2352-byte sectors with error correction
-/// around each one, and is a different problem.
+/// This works on a raw `.bin` track as well as an `.iso`. The filesystem is
+/// the same either way; only the packaging around each sector differs, and
+/// `layout_of` works out which is in front of it before reading anything.
 pub fn identify_iso9660(path: &Path) -> Option<&'static str> {
     let mut file = std::fs::File::open(path).ok()?;
-
-    let mut pvd = [0u8; SECTOR as usize];
-    file.seek(SeekFrom::Start(PVD_SECTOR * SECTOR)).ok()?;
-    file.read_exact(&mut pvd).ok()?;
-    // Descriptor type 1 followed by the standard identifier: a primary
-    // volume descriptor, and therefore an ISO 9660 filesystem.
-    if pvd[0] != 1 || &pvd[1..6] != b"CD001" {
-        return None;
-    }
+    let layout = layout_of(&mut file)?;
+    let pvd = read_sector(&mut file, layout, PVD_SECTOR)?;
 
     // The root directory's own record is embedded at offset 156.
     let (root_lba, root_len) = extent(&pvd[156..156 + 34])?;
@@ -112,9 +173,7 @@ pub fn identify_iso9660(path: &Path) -> Option<&'static str> {
         return None;
     }
 
-    let mut dir = vec![0u8; root_len];
-    file.seek(SeekFrom::Start(root_lba * SECTOR)).ok()?;
-    file.read_exact(&mut dir).ok()?;
+    let dir = read_extent(&mut file, layout, root_lba, root_len)?;
     let entries = read_directory(&dir);
 
     let named = |want: &str| entries.iter().any(|(name, _, _)| name == want);
@@ -124,10 +183,7 @@ pub fn identify_iso9660(path: &Path) -> Option<&'static str> {
     }
 
     if let Some((_, lba, len)) = entries.iter().find(|(n, _, _)| n == "SYSTEM.CNF") {
-        let mut buf = vec![0u8; (*len).min(4096)];
-        if file.seek(SeekFrom::Start(lba * SECTOR)).is_ok()
-            && file.read_exact(&mut buf).is_ok()
-        {
+        if let Some(buf) = read_extent(&mut file, layout, *lba, (*len).min(4096)) {
             let text = String::from_utf8_lossy(&buf).to_ascii_uppercase();
             // BOOT2 is the PlayStation 2 key; plain BOOT is the original.
             if text.contains("BOOT2") {
@@ -162,7 +218,7 @@ fn read_directory(dir: &[u8]) -> Vec<(String, u64, usize)> {
         if len == 0 {
             // Records never straddle a sector, so a zero length means the rest
             // of this sector is padding.
-            let next = (i / SECTOR as usize + 1) * SECTOR as usize;
+            let next = (i / DATA + 1) * DATA;
             if next <= i || next >= dir.len() {
                 break;
             }
@@ -333,6 +389,70 @@ mod tests {
         let iso = build_iso("UMD_DATA.BIN;1", b"ULUS10041|0001|G");
         let path = write_temp("Some PSP Game.iso", &iso);
         assert_eq!(identify(&path), Some("psp"));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// Wrap a plain image's sectors the way a raw CD track carries them:
+    /// a 12-byte sync pattern, a 4-byte address, an optional 8-byte subheader
+    /// for Mode 2, then the 2048 bytes of filesystem, then room for the error
+    /// correction that a real dump would fill in.
+    fn to_raw_track(iso: &[u8], data_offset: usize) -> Vec<u8> {
+        const RAW: usize = 2352;
+        let mut out = Vec::new();
+        for chunk in iso.chunks(2048) {
+            let mut sector = vec![0u8; RAW];
+            sector[0] = 0x00;
+            for b in sector.iter_mut().take(11).skip(1) {
+                *b = 0xFF;
+            }
+            sector[11] = 0x00;
+            sector[data_offset..data_offset + chunk.len()].copy_from_slice(chunk);
+            out.extend_from_slice(&sector);
+        }
+        out
+    }
+
+    /// The one this was written for: a bare `.bin` with no `.cue` beside it.
+    /// The filesystem is identical to an `.iso`; it is only wrapped in the
+    /// sync marks and error correction a real disc carries, so reading it
+    /// means stepping over that packaging rather than anything new.
+    #[test]
+    fn reads_a_playstation_2_disc_out_of_a_raw_bin_track() {
+        let iso = build_iso("SYSTEM.CNF;1", b"BOOT2 = cdrom0:SLUS_203.12;1 VER=1.00");
+        let path = write_temp("Sonic Riders (Track 1).bin", &to_raw_track(&iso, 16));
+        assert_eq!(identify(&path), Some("ps2"));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// Mode 2 Form 1 puts a further 8-byte subheader in front of the data,
+    /// which is how most PlayStation discs were actually pressed.
+    #[test]
+    fn reads_a_raw_track_in_mode_2() {
+        let iso = build_iso("SYSTEM.CNF;1", b"BOOT = cdrom:SLUS_004.02;1 TCB = 4");
+        let path = write_temp("Final Fantasy VII (Disc 1).bin", &to_raw_track(&iso, 24));
+        assert_eq!(identify(&path), Some("ps1"));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// A directory or a file longer than one sector has to be gathered a
+    /// sector at a time out of a raw track, because the packaging sits
+    /// between the pieces. Reading it as one run would splice sync marks
+    /// into the middle of the data.
+    #[test]
+    fn reads_across_sector_boundaries_in_a_raw_track() {
+        let mut cnf = vec![b' '; 3000];
+        cnf[..5].copy_from_slice(b"BOOT2");
+        let iso = build_iso("SYSTEM.CNF;1", &cnf);
+        let path = write_temp("Big.bin", &to_raw_track(&iso, 16));
+        assert_eq!(identify(&path), Some("ps2"));
+        let _ = std::fs::remove_dir_all(path.parent().unwrap());
+    }
+
+    /// A raw track full of nothing is still not a disc.
+    #[test]
+    fn a_bin_that_is_not_a_disc_says_nothing() {
+        let path = write_temp("audio.bin", &vec![0u8; 2352 * 20]);
+        assert_eq!(identify(&path), None);
         let _ = std::fs::remove_dir_all(path.parent().unwrap());
     }
 

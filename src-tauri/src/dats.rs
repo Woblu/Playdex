@@ -129,7 +129,12 @@ fn rom_from(e: &quick_xml::events::BytesStart) -> Option<DatRom> {
         sha1: None,
     };
     for attr in e.attributes().flatten() {
-        let value = attr.unescape_value().unwrap_or_default().to_string();
+        // DATs carry no XML declaration, so 1.0 is what the spec says to
+        // assume, and what quick-xml's own default is.
+        let value = attr
+            .normalized_value(quick_xml::XmlVersion::Implicit1_0)
+            .unwrap_or_default()
+            .to_string();
         match attr.key.as_ref() {
             "name" => rom.name = value,
             "size" => rom.size = value.parse().unwrap_or(0),
