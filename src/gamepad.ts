@@ -151,6 +151,15 @@ export function useGamepad(
 
     let raf = 0;
     let sawPad = false;
+    /**
+     * False until a frame has been spent recording what is already held down.
+     *
+     * Without this, coming back from an emulator while still holding a button
+     * reads as a fresh press: the map of held buttons is empty, so the button
+     * looks like it went from up to down and the game relaunches the moment
+     * you quit it.
+     */
+    let primed = false;
     /** Last frame's state, keyed by button index. */
     const held = new Map<number, boolean>();
     /** Separate keys for the raw listener, so both can fire in one frame. */
@@ -182,8 +191,39 @@ export function useGamepad(
       }
     };
 
+    const forget = () => {
+      primed = false;
+      held.clear();
+      heldRaw.clear();
+      nextRepeat.clear();
+    };
+
+    let focused = true;
+    const onBlur = () => {
+      focused = false;
+      forget();
+    };
+    const onFocus = () => {
+      focused = true;
+    };
+    window.addEventListener("blur", onBlur);
+    window.addEventListener("focus", onFocus);
+
     const poll = () => {
       raf = requestAnimationFrame(poll);
+
+      // While another window has the pad, its buttons are not ours to read.
+      // An emulator is a window like any other, and a webview that is merely
+      // behind one still gets handed every press: without this, playing a
+      // game drives the library underneath it at the same time.
+      //
+      // Driven by real blur and focus events, and starting from "we have it",
+      // so that a webview which reports focus oddly leaves the pad working
+      // rather than silently dead.
+      if (!focused) {
+        if (primed) forget();
+        return;
+      }
 
       const pads = navigator.getGamepads?.() ?? [];
       const pad = Array.from(pads).find((p): p is Gamepad => !!p && p.connected);
@@ -191,9 +231,7 @@ export function useGamepad(
       if (!pad) {
         if (sawPad) {
           sawPad = false;
-          held.clear();
-          heldRaw.clear();
-          nextRepeat.clear();
+          forget();
           ref.current.onConnected?.(false, null);
         }
         return;
@@ -207,6 +245,17 @@ export function useGamepad(
           buttons: pad.buttons.length,
           axes: pad.axes.length,
         });
+      }
+
+      // Spend one frame learning what is already held before anything counts
+      // as a press. See `primed`.
+      if (!primed) {
+        primed = true;
+        for (let i = 0; i < pad.buttons.length; i++) {
+          held.set(i, pad.buttons[i].pressed);
+          heldRaw.set(i, pad.buttons[i].pressed);
+        }
+        return;
       }
 
       // Report presses by raw index, so the setup screen can show what the pad
@@ -248,7 +297,11 @@ export function useGamepad(
     };
 
     raf = requestAnimationFrame(poll);
-    return () => cancelAnimationFrame(raf);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.removeEventListener("blur", onBlur);
+      window.removeEventListener("focus", onFocus);
+    };
   }, [enabled]);
 }
 

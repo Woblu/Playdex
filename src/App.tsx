@@ -272,7 +272,26 @@ export default function App() {
       );
     });
 
-  const handleLaunch = (id: number) => run(() => api.launchGame(id));
+  /**
+   * One game at a time.
+   *
+   * The pad is stopped while a game runs, but that leaves the moment between
+   * asking for a launch and the game reporting itself started, and it leaves
+   * the mouse, which can be clicked twice. Starting a second copy of a game
+   * is never what anyone meant, so it is refused here as well.
+   */
+  const launching = useRef(false);
+
+  const handleLaunch = (id: number) =>
+    run(async () => {
+      if (launching.current || nowPlaying) return;
+      launching.current = true;
+      try {
+        await api.launchGame(id);
+      } finally {
+        launching.current = false;
+      }
+    });
 
   const handleToggleFavorite = (game: Game) =>
     run(async () => {
@@ -427,7 +446,13 @@ export default function App() {
         if (!anyModalOpen) stepPlatform(side === "left" ? -1 : 1);
       },
     },
-    { bindings: resolveBindings(padLayout, padCustom, padInfo) },
+    {
+      bindings: resolveBindings(padLayout, padCustom, padInfo),
+      // Hands off entirely while a game is running. The emulator has the pad,
+      // and every press meant for the game was also arriving here - which,
+      // with a game tile focused, started the game again on every press.
+      enabled: !nowPlaying,
+    },
   );
 
   // ------------------------------------------------------------ rendering

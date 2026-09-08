@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Playdex — a ROM library that knows what your files are</title>
-<meta name="description" content="Playdex is a ROM library manager and emulator launcher for Windows. It identifies your games by reading them, fetches artwork and details, and launches them through RetroArch or any standalone emulator.">
+<title>Playdex — a front end for the games you already own</title>
+<meta name="description" content="Playdex scans your ROM folders, works out what everything is, pulls down box art, and launches games through RetroArch or any standalone emulator. Free, open source, Windows.">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <meta property="og:title" content="Playdex">
-<meta property="og:description" content="A ROM library manager and emulator launcher. It identifies your games by reading them, not by guessing from the filename.">
+<meta property="og:description" content="Scans your ROM folders, works out what everything is, and launches it. Free and open source.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://woblu.github.io/Playdex/">
 <meta name="theme-color" content="#0b0e13">
@@ -314,10 +314,22 @@ p { margin: 0; }
   color: #9fb2d4;
 }
 
+/* ------------------------------------------------------- screenshot slots
+   Every picture on this page has two forms: a real PNG, and a drawing of the
+   same thing made of divs. The drawing shows until the PNG is there, and the
+   swap happens on its own - drop a file into docs/shots/ and it appears. See
+   docs/shots/README.md for the names.
+
+   Doing it this way round means the page is never broken and never shows an
+   empty box, whether or not anybody has got round to taking screenshots. */
+img.real { display: none; width: 100%; }
+.has-shot img.real { display: block; }
+.has-shot .drawn { display: none; }
+
 /* ------------------------------------------------------------- app frame
-   An illustration of the layout, not a screenshot. Deliberately without game
-   titles or box art: the shape is the point, and the artwork in a real
-   library belongs to the people who made those games. */
+   The drawn stand-in: the layout without game titles or box art, since the
+   shape is the point and a real library's artwork belongs to the people who
+   made those games. */
 .shot {
   margin-top: clamp(56px, 7vw, 84px);
   border: 1px solid var(--line);
@@ -326,6 +338,7 @@ p { margin: 0; }
   background: var(--ink-2);
   box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.85);
 }
+.shot img.real { border-radius: 11px; }
 .shot-bar {
   display: flex;
   align-items: center;
@@ -457,7 +470,9 @@ p { margin: 0; }
   background: var(--panel);
   overflow: hidden;
 }
-.skin .draw { height: 132px; border-bottom: 1px solid var(--line-soft); padding: 12px; background: #10151d; }
+.skin .draw { height: 132px; border-bottom: 1px solid var(--line-soft); padding: 12px; background: #10151d; overflow: hidden; }
+.skin.has-shot .draw { padding: 0; }
+.skin .draw img.real { height: 100%; object-fit: cover; object-position: top left; }
 .skin .meta { padding: 16px 18px 20px; }
 .skin h3 { margin-bottom: 7px; }
 .skin p { color: var(--muted); font-size: 14px; }
@@ -589,18 +604,19 @@ p { margin: 0; }
         <img src="logo.svg" alt="Playdex">
         <span>Windows &middot; free &middot; open source</span>
       </div>
-      <h1>A ROM library that knows<br><span class="accent">what your files are.</span></h1>
+      <h1>A front end for the games<br><span class="accent">you already own.</span></h1>
       <p class="lede">
-        Point Playdex at the folders where you keep your games. It works out what
-        each one is by reading it, pulls down the artwork and the details, and
-        launches it through RetroArch or whatever emulator you already use.
+        Point Playdex at the folders where you keep your ROMs and it sorts out
+        what is in them. Box art and details get pulled down on their own. Then
+        you press play and it opens in RetroArch, or whatever emulator you
+        already use.
       </p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/Woblu/Playdex/releases/latest">
           Download for Windows
         </a>
         <a class="btn btn-ghost" href="https://github.com/Woblu/Playdex">Source on GitHub</a>
-        <span class="note">Updates itself after that.</span>
+        <span class="note">It updates itself after that.</span>
       </div>
     </div>
   </div>
@@ -610,12 +626,13 @@ p { margin: 0; }
 
   <!-- ------------------------------------------------------------- shot -->
   <div class="wrap">
-    <div class="shot" role="img" aria-label="Illustration of the Playdex layout: a sidebar of systems, a grid of games, and a detail panel.">
-      <div class="shot-bar">
+    <div class="shot" data-shot-wrap>
+      <img class="real" data-shot="shots/library.png" alt="The Playdex library: systems down the left, a grid of games, and a detail panel on the right.">
+      <div class="drawn shot-bar">
         <i></i><i></i><i></i>
         <b>Playdex</b>
       </div>
-      <div class="shot-body">
+      <div class="drawn shot-body">
         <div class="shot-side">
           <div class="row on"><s></s> All games <em>1,284</em></div>
           <div class="row"><s></s> Nintendo 64 <em>112</em></div>
@@ -651,29 +668,29 @@ p { margin: 0; }
       <div class="pillars">
         <div class="pillar">
           <span class="num">01</span>
-          <h3>It identifies your games</h3>
+          <h3>It knows what your files are</h3>
           <p>
-            Filenames lie and folders get messy. Playdex reads the file itself —
-            headers, disc filesystems, what is inside the archive — and works out
-            which system it belongs to from that.
+            Filenames lie and folders get messy, so Playdex opens the file and
+            looks instead. Headers, disc filesystems, what is sitting inside the
+            archive. That decides the system, not the name someone typed.
           </p>
         </div>
         <div class="pillar">
           <span class="num">02</span>
-          <h3>It fills in everything else</h3>
+          <h3>It goes and gets the art</h3>
           <p>
-            Cover art, descriptions, developer, release date, players, region.
-            Fetched automatically the moment a scan finishes, matched on the
-            ROM's own checksums so it lands on the right game.
+            Box art, a description, developer, year, how many players. It starts
+            on its own once a scan finishes, and matches on the ROM's checksum,
+            so it does not land on the wrong game.
           </p>
         </div>
         <div class="pillar">
           <span class="num">03</span>
-          <h3>It launches whatever you have</h3>
+          <h3>It launches what you already use</h3>
           <p>
-            A libretro core through RetroArch, or a standalone emulator you point
-            it at. Set it per system, or override it for one awkward game that
-            needs something different.
+            A libretro core through RetroArch, or any standalone emulator you
+            point it at. Set that per system. If one awkward game needs something
+            else, override that one game.
           </p>
         </div>
       </div>
@@ -685,12 +702,11 @@ p { margin: 0; }
     <div class="wrap">
       <div class="section-head">
         <div class="eyebrow">How it works</div>
-        <h2>It reads the file, not the filename.</h2>
+        <h2>An extension barely tells you anything.</h2>
         <p class="lede">
-          <code>.iso</code>, <code>.bin</code> and <code>.chd</code> belong to a
-          dozen systems between them, so an extension is barely a hint. Playdex
-          works down a ladder of evidence and stops at the first rung that
-          actually settles it.
+          <code>.iso</code>, <code>.bin</code> and <code>.chd</code> each cover a
+          dozen systems. So Playdex works down a list of evidence and stops at the
+          first thing that actually settles it.
         </p>
       </div>
 
@@ -698,28 +714,29 @@ p { margin: 0; }
         <ol class="steps">
           <li>
             <b>A folder you assigned</b>
-            If you have told it that this folder is Dreamcast, that is the end of it.
+            You told it this folder is Dreamcast. Done, no argument.
           </li>
           <li>
             <b>An extension only one system uses</b>
-            <code>.sfc</code> is a Super Nintendo cartridge and nothing else.
+            <code>.sfc</code> is a Super Nintendo cartridge and nothing else is.
           </li>
           <li>
             <b>What is inside the archive</b>
-            A <code>.7z</code> belongs to no system; the ROM inside it does.
+            A <code>.7z</code> is not any system. The ROM inside it is.
           </li>
           <li class="win">
-            <b>The bytes themselves</b>
-            A Wii dump carries four known bytes at <code>0x18</code>. A Saturn disc
-            writes its name into the first sector. A PlayStation 2 disc says nothing
-            at all — so Playdex reads the disc's filesystem and finds the file that
-            names its boot executable. It does this on raw <code>.bin</code> tracks
-            too, stepping over the sync marks and error correction a real CD carries.
+            <b>The bytes</b>
+            A Wii dump has four known bytes at <code>0x18</code>. A Saturn disc
+            writes its own name into the first sector. A PlayStation 2 disc says
+            nothing useful up front, so Playdex reads the disc's filesystem and
+            finds the file naming its boot executable. Raw <code>.bin</code> tracks
+            work too. It steps over the sync marks and error correction that a real
+            CD carries around every sector.
           </li>
           <li>
-            <b>The folder names, then the ROM's own name</b>
-            Last resorts, matched on whole words, so a title is never mistaken for a
-            system whose letters it happens to contain.
+            <b>Folder names, then the ROM's own name</b>
+            Last resorts. Matched whole-word, so a game called Legbreaker does not
+            end up filed under Game Boy.
           </li>
         </ol>
 
@@ -734,10 +751,11 @@ p { margin: 0; }
             // plain BOOT would be the original PlayStation.</span>
           </div>
           <p class="lede" style="margin-top:20px; font-size:15px;">
-            Every ROM is hashed as it goes in — CRC32, MD5 and SHA1 in a single
-            pass. For a zipped game the ROM <em>inside</em> is hashed, not the
-            archive, because that is what the metadata databases and the
-            No-Intro and Redump catalogues index.
+            Everything gets hashed on the way in: CRC32, MD5 and SHA1, in one pass
+            over the file. For a zipped game it is the ROM <em>inside</em> that gets
+            hashed, not the zip. That is what the metadata sites and the No-Intro
+            and Redump catalogues index, so hashing the container matches nothing
+            at all.
           </p>
         </div>
       </div>
@@ -749,17 +767,18 @@ p { margin: 0; }
     <div class="wrap">
       <div class="section-head">
         <div class="eyebrow">Appearances</div>
-        <h2>Three ways to look at it.</h2>
+        <h2>Three layouts.</h2>
         <p class="lede">
-          Not a colour swap — three separate layouts, because a desk and a sofa
-          want different shapes. Everything works the same in all of them.
+          Not a colour swap. A desk and a sofa want different shapes, so these are
+          three separate layouts. Everything works the same in all of them.
         </p>
       </div>
 
       <div class="skins">
-        <div class="skin">
+        <div class="skin" data-shot-wrap>
           <div class="draw">
-            <div class="mini">
+            <img class="real" data-shot="shots/skin-playdex.png" alt="The Playdex layout.">
+            <div class="drawn mini">
               <u class="rail"></u>
               <div class="cells">
                 <u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u>
@@ -768,13 +787,14 @@ p { margin: 0; }
           </div>
           <div class="meta">
             <h3>Playdex</h3>
-            <p>The desktop view. Sidebar of systems, a sortable grid, and a detail panel for whatever you have selected.</p>
+            <p>The desktop one. Systems down the side, a sortable grid, and a panel for whatever you have selected.</p>
           </div>
         </div>
 
-        <div class="skin">
+        <div class="skin" data-shot-wrap>
           <div class="draw">
-            <div class="mini">
+            <img class="real" data-shot="shots/skin-console.png" alt="The Console layout.">
+            <div class="drawn mini">
               <div class="col">
                 <div class="icons"><u></u><u class="mid"></u><u></u></div>
                 <div class="strip"><u></u><u></u><u></u><u></u><u></u></div>
@@ -783,13 +803,14 @@ p { margin: 0; }
           </div>
           <div class="meta">
             <h3>Console</h3>
-            <p>A home screen. One row of large icons sized against the window, and a row of round buttons underneath.</p>
+            <p>A home screen. One row of big icons scaled to the window, with round system buttons under it.</p>
           </div>
         </div>
 
-        <div class="skin">
+        <div class="skin" data-shot-wrap>
           <div class="draw">
-            <div class="mini">
+            <img class="real" data-shot="shots/skin-bigpicture.png" alt="The Big Picture layout.">
+            <div class="drawn mini">
               <u class="rail"></u>
               <div class="col">
                 <div class="big"></div>
@@ -799,7 +820,7 @@ p { margin: 0; }
           </div>
           <div class="meta">
             <h3>Big Picture</h3>
-            <p>Living room. Hero artwork, a left rail, and a shelf of capsules. Drive the whole thing from a controller.</p>
+            <p>For the TV. Big artwork, a rail down the left, a shelf of capsules. Run the whole thing off a controller.</p>
           </div>
         </div>
       </div>
@@ -811,71 +832,71 @@ p { margin: 0; }
     <div class="wrap">
       <div class="section-head">
         <div class="eyebrow">Everything else</div>
-        <h2>The parts you only notice when they are missing.</h2>
+        <h2>The rest of it.</h2>
       </div>
 
       <div class="cards">
         <div class="card">
           <h3>Artwork and details</h3>
           <p>
-            ScreenScraper and TheGamesDB for text, libretro-thumbnails for art,
-            which needs no account at all. Runs on its own after a scan.
+            ScreenScraper and TheGamesDB for the text, libretro-thumbnails for
+            the art. That last one needs no account, so it works out of the box.
           </p>
         </div>
         <div class="card">
           <h3>Multi-disc games</h3>
           <p>
-            A three-disc game is one entry. Playdex writes the playlist and the
-            emulator swaps discs itself when the game asks for the next one.
+            Three discs, one entry in your library. Playdex writes the playlist
+            and the emulator handles the swap when the game asks for disc 2.
           </p>
         </div>
         <div class="card">
           <h3>Cheats</h3>
           <p>
-            Found per game, switched on where you can see them, and written where
-            RetroArch looks for them the moment you press play.
+            Listed per game. Flick on the ones you want and they are written
+            where RetroArch expects them when you hit play. No extra step.
           </p>
         </div>
         <div class="card">
           <h3>ROM hacks</h3>
           <p>
-            Apply an IPS, UPS or BPS patch and the result joins your library as
-            its own game. Your original ROM is never modified.
+            Point it at an IPS, UPS or BPS patch and the result turns up as its
+            own game. Your original ROM is left exactly as it was.
           </p>
         </div>
         <div class="card">
-          <h3>Verify your dumps</h3>
+          <h3>Check your dumps</h3>
           <p>
-            Import a No-Intro or Redump catalogue and Playdex tells you which of
-            your files are known-good and which are something else.
+            Import a No-Intro or Redump catalogue and it will tell you which of
+            your files are known-good and which are something else entirely.
           </p>
         </div>
         <div class="card">
           <h3>Saves</h3>
           <p>
-            Find the save files and save states for a game wherever the emulator
-            hid them, and copy them somewhere safe before you overwrite one.
+            Finds your saves and save states wherever the emulator buried them,
+            and copies them somewhere safe before you go and overwrite one.
           </p>
         </div>
         <div class="card">
           <h3>Controller</h3>
           <p>
-            Navigate the whole app from a gamepad, with the buttons remappable
-            for pads that report themselves oddly.
+            Drive the whole app from a pad. Buttons are remappable, because half
+            the pads out there report themselves in an order of their own.
           </p>
         </div>
         <div class="card">
           <h3>Drag and drop</h3>
           <p>
-            Drop a ROM anywhere on the window and it joins the library where it
-            lies. Drop a folder and it becomes a library folder and gets scanned.
+            Drop a ROM anywhere on the window and it is added, right where it
+            already sits. Drop a folder and that whole folder gets scanned.
           </p>
         </div>
         <div class="card">
           <h3>It updates itself</h3>
           <p>
-            New versions are signed and arrive in the app. You install it once
-            and then stop thinking about it.
+            New versions are signed and turn up in the app. Install it once and
+            forget about it.
           </p>
         </div>
       </div>
@@ -887,10 +908,11 @@ p { margin: 0; }
     <div class="wrap">
       <div class="get">
         <div class="eyebrow" style="text-align:center">Download</div>
-        <h2>Point it at a folder and see.</h2>
+        <h2>Try it on one folder.</h2>
         <p class="lede" style="margin-top:14px">
-          One installer. It finds RetroArch on its own if you have it, and the
-          first scan tells you what it found and what it could not make sense of.
+          One installer and not much setup. It finds RetroArch by itself if you
+          have it, and the first scan tells you what it found and what it could
+          not make sense of.
         </p>
         <div class="cta">
           <a class="btn btn-primary" href="https://github.com/Woblu/Playdex/releases/latest">
@@ -899,8 +921,8 @@ p { margin: 0; }
           <a class="btn btn-ghost" href="https://github.com/Woblu/Playdex#readme">Read the docs</a>
         </div>
         <div class="reqs">
-          Windows 10 or 11 &nbsp;·&nbsp; needs the WebView2 runtime, which Windows 11 already has<br>
-          Free and open source &nbsp;·&nbsp; no account required to use it
+          Windows 10 or 11 &nbsp;·&nbsp; needs WebView2, which Windows 11 already ships with<br>
+          Free and open source &nbsp;·&nbsp; no account needed
         </div>
       </div>
     </div>
@@ -918,15 +940,31 @@ p { margin: 0; }
     <a href="https://github.com/Woblu/Playdex/releases">Releases</a>
     <a href="https://github.com/Woblu/Playdex/issues">Report a problem</a>
     <p class="scope">
-      Playdex organises and launches games you already own and already have on
-      disk. It does not find, download or supply games, and nothing is bundled
-      with it. All artwork it displays comes from metadata databases and belongs
-      to the people who made those games.
+      Playdex organises and launches games that are already on your disk. It
+      does not find, download or supply games, and nothing is bundled with it.
+      Artwork comes from metadata databases and belongs to the people who made
+      those games.
     </p>
   </div>
 </footer>
 
 <script>
+  // Swap the drawings for real screenshots wherever one exists. Loading it
+  // through a throwaway Image first means a missing file costs a 404 in the
+  // console and nothing else: no broken-image icon ever reaches the page.
+  Array.prototype.forEach.call(
+    document.querySelectorAll("img.real[data-shot]"),
+    function (img) {
+      var probe = new Image();
+      probe.onload = function () {
+        img.src = img.getAttribute("data-shot");
+        var wrap = img.closest("[data-shot-wrap]");
+        if (wrap) wrap.classList.add("has-shot");
+      };
+      probe.src = img.getAttribute("data-shot");
+    }
+  );
+
   // The nav only grows a border once it is actually sitting over content.
   var nav = document.getElementById("nav");
   var onScroll = function () {
