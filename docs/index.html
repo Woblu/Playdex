@@ -3,11 +3,11 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Playdex — a front end for the games you already own</title>
+<title>Playdex — a library and launcher for your ROMs</title>
 <meta name="description" content="Playdex scans your ROM folders, works out what everything is, pulls down box art, and launches games through RetroArch or any standalone emulator. Free, open source, Windows.">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
 <meta property="og:title" content="Playdex">
-<meta property="og:description" content="Scans your ROM folders, works out what everything is, and launches it. Free and open source.">
+<meta property="og:description" content="Makes a library out of your ROM folders. Works out what every file is, downloads the box art, and launches games in RetroArch or a standalone emulator.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://woblu.github.io/Playdex/">
 <meta name="theme-color" content="#0b0e13">
@@ -94,6 +94,7 @@ h1, h2, h3 {
 }
 
 h2 { font-size: clamp(26px, 3.4vw, 38px); }
+h2 code { font-size: 0.84em; padding: 2px 9px; }
 h3 { font-size: 17px; letter-spacing: -0.01em; }
 
 p { margin: 0; }
@@ -308,11 +309,6 @@ p { margin: 0; }
   background: rgba(10, 14, 24, 0.34);
 }
 .btn-ghost:hover { border-color: rgba(255, 255, 255, 0.55); }
-
-.cta .note {
-  font-size: 13.5px;
-  color: #9fb2d4;
-}
 
 /* ------------------------------------------------------- screenshot slots
    Every picture on this page has two forms: a real PNG, and a drawing of the
@@ -604,19 +600,17 @@ img.real { display: none; width: 100%; }
         <img src="logo.svg" alt="Playdex">
         <span>Windows &middot; free &middot; open source</span>
       </div>
-      <h1>A front end for the games<br><span class="accent">you already own.</span></h1>
+      <h1>Playdex makes a library out of<br><span class="accent">your ROM folders.</span></h1>
       <p class="lede">
-        Point Playdex at the folders where you keep your ROMs and it sorts out
-        what is in them. Box art and details get pulled down on their own. Then
-        you press play and it opens in RetroArch, or whatever emulator you
-        already use.
+        It works out what every file actually is, then goes and downloads the box
+        art and the details. Press play and the game opens in RetroArch, or in
+        whatever standalone emulator you point it at.
       </p>
       <div class="cta">
         <a class="btn btn-primary" href="https://github.com/Woblu/Playdex/releases/latest">
           Download for Windows
         </a>
         <a class="btn btn-ghost" href="https://github.com/Woblu/Playdex">Source on GitHub</a>
-        <span class="note">It updates itself after that.</span>
       </div>
     </div>
   </div>
@@ -702,11 +696,12 @@ img.real { display: none; width: 100%; }
     <div class="wrap">
       <div class="section-head">
         <div class="eyebrow">How it works</div>
-        <h2>An extension barely tells you anything.</h2>
+        <h2>A <code>.bin</code> might be a PlayStation disc, or it might be an
+          N64 cartridge.</h2>
         <p class="lede">
-          <code>.iso</code>, <code>.bin</code> and <code>.chd</code> each cover a
-          dozen systems. So Playdex works down a list of evidence and stops at the
-          first thing that actually settles it.
+          Same story with <code>.iso</code> and <code>.chd</code>. So Playdex works
+          down a list of evidence and takes the first thing that actually settles
+          it.
         </p>
       </div>
 
