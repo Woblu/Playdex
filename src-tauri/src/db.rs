@@ -137,6 +137,71 @@ const GAME_COLS: &str = "id, path, filename, platform, size, crc32, md5, sha1, i
      cover_path, screenshot_path, logo_path, scrape_status, scrape_source, favorite, hidden, \
      play_count, play_seconds, last_played, added_at, base_game_id, patch_path";
 
+/// Repoint stored paths after the app data directory has moved.
+///
+/// Artwork, imported patches and the ROMs produced by applying one are all
+/// recorded as absolute paths into the app data directory. That directory is
+/// named after the bundle identifier, so renaming the app moves it and every
+/// one of those paths goes stale at once: the files are all still there under
+/// the new name, but nothing in the library points at them any more.
+///
+/// This rewrites the directory segment in place, wherever it appears. It
+/// sweeps every column of every table rather than a fixed list, because the
+/// set of columns holding such a path has grown before and the `LIKE` guard
+/// means a column that never held one is never written to. Values that do not
+/// mention the old directory are left exactly as they were, which is what
+/// makes it safe to run against a library with nothing to fix.
+///
+/// Idempotent: once it has run nothing matches, and it costs a single query.
+/// Returns how many values were rewritten.
+pub fn repoint_data_dir(conn: &Connection, old_dir: &str, new_dir: &str) -> Result<usize> {
+    if old_dir == new_dir || old_dir.is_empty() {
+        return Ok(0);
+    }
+    let pattern = format!("%{old_dir}%");
+
+    // The cheap check first, so an ordinary launch costs one query rather than
+    // a scan of every column in the database. If it cannot be answered the
+    // sweep runs anyway, since being slow once beats leaving a library broken.
+    let stale: bool = conn
+        .query_row(
+            "SELECT EXISTS(SELECT 1 FROM games
+             WHERE cover_path LIKE ?1 OR screenshot_path LIKE ?1
+                OR logo_path LIKE ?1 OR path LIKE ?1)",
+            params![&pattern],
+            |row| row.get(0),
+        )
+        .unwrap_or(true);
+    if !stale {
+        return Ok(0);
+    }
+
+    let tables: Vec<String> = conn
+        .prepare("SELECT name FROM sqlite_master WHERE type = 'table' AND name NOT LIKE 'sqlite_%'")?
+        .query_map([], |row| row.get(0))?
+        .collect::<rusqlite::Result<Vec<String>>>()?;
+
+    let mut rewritten = 0usize;
+    for table in tables {
+        let columns: Vec<String> = conn
+            .prepare(&format!("PRAGMA table_info(\"{table}\")"))?
+            .query_map([], |row| row.get::<_, String>(1))?
+            .collect::<rusqlite::Result<Vec<String>>>()?;
+
+        for column in columns {
+            // A numeric column can never satisfy the LIKE, so tables holding
+            // no paths at all are read and then left alone.
+            let sql = format!(
+                "UPDATE \"{table}\" SET \"{column}\" = replace(\"{column}\", ?1, ?2) \
+                 WHERE \"{column}\" LIKE ?3"
+            );
+            rewritten += conn.execute(&sql, params![old_dir, new_dir, &pattern])?;
+        }
+    }
+
+    Ok(rewritten)
+}
+
 pub fn open(path: &Path) -> Result<Connection> {
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -997,4 +1062,113 @@ pub fn longest_session(conn: &Connection) -> Result<i64> {
         .query_row("SELECT COALESCE(MAX(seconds), 0) FROM play_sessions", [], |r| {
             r.get(0)
         })?)
+}
+
+#[cfg(test)]
+mod repoint_tests {
+    use super::{open, repoint_data_dir};
+
+    const OLD: &str = "com.boazv.playdex";
+    const NEW: &str = "com.boazv.romcade";
+
+    fn library() -> (scratch::Guard, rusqlite::Connection) {
+        let dir = scratch::Guard::new("romcade-repoint");
+        let conn = open(&dir.path().join("library.db")).unwrap();
+        (dir, conn)
+    }
+
+    fn insert_game(conn: &rusqlite::Connection, id: i64, path: &str, cover: Option<&str>) {
+        conn.execute(
+            "INSERT INTO games (id, path, filename, title, added_at, cover_path)
+             VALUES (?1, ?2, 'f', 't', 0, ?3)",
+            rusqlite::params![id, path, cover],
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn rewrites_artwork_left_behind_by_the_rename() {
+        let (_dir, conn) = library();
+        let cover_before = format!(r"C:\x\{OLD}\media\1\cover.jpg");
+        insert_game(&conn, 1, r"D:\roms\mario.nes", Some(&cover_before));
+
+        assert_eq!(repoint_data_dir(&conn, OLD, NEW).unwrap(), 1);
+
+        let cover: String = conn
+            .query_row("SELECT cover_path FROM games WHERE id = 1", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(cover, format!(r"C:\x\{NEW}\media\1\cover.jpg"));
+    }
+
+    #[test]
+    fn rewrites_a_patched_roms_own_path_too() {
+        let (_dir, conn) = library();
+        insert_game(&conn, 2, &format!(r"C:\x\{OLD}\hacks\2\hack.sfc"), None);
+
+        assert_eq!(repoint_data_dir(&conn, OLD, NEW).unwrap(), 1);
+
+        let path: String = conn
+            .query_row("SELECT path FROM games WHERE id = 2", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(path, format!(r"C:\x\{NEW}\hacks\2\hack.sfc"));
+    }
+
+    #[test]
+    fn leaves_the_players_own_rom_paths_alone() {
+        let (_dir, conn) = library();
+        let mine = r"D:\roms\snes\zelda.sfc";
+        insert_game(&conn, 3, mine, None);
+
+        assert_eq!(repoint_data_dir(&conn, OLD, NEW).unwrap(), 0);
+
+        let path: String = conn
+            .query_row("SELECT path FROM games WHERE id = 3", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(path, mine);
+    }
+
+    #[test]
+    fn is_idempotent() {
+        let (_dir, conn) = library();
+        insert_game(
+            &conn,
+            4,
+            r"D:\roms\a.nes",
+            Some(&format!(r"C:\x\{OLD}\media\4\cover.jpg")),
+        );
+
+        assert_eq!(repoint_data_dir(&conn, OLD, NEW).unwrap(), 1);
+        assert_eq!(repoint_data_dir(&conn, OLD, NEW).unwrap(), 0);
+        assert_eq!(repoint_data_dir(&conn, NEW, NEW).unwrap(), 0);
+    }
+
+    /// A directory that removes itself, so each test gets its own library.
+    mod scratch {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+
+        pub struct Guard(std::path::PathBuf);
+
+        impl Guard {
+            pub fn new(tag: &str) -> Self {
+                let n = NEXT.fetch_add(1, Ordering::Relaxed);
+                let dir =
+                    std::env::temp_dir().join(format!("{tag}-{}-{n}", std::process::id()));
+                let _ = std::fs::remove_dir_all(&dir);
+                std::fs::create_dir_all(&dir).unwrap();
+                Guard(dir)
+            }
+
+            pub fn path(&self) -> &std::path::Path {
+                &self.0
+            }
+        }
+
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+    }
 }

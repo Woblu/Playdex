@@ -167,6 +167,20 @@ pub fn run() {
             std::fs::create_dir_all(&data_dir)?;
 
             let conn = db::open(&data_dir.join("library.db"))?;
+
+            // Moving the folder is only half of it. Artwork and patched ROMs
+            // are recorded as absolute paths into that folder, so they have to
+            // be repointed as well or the library comes up with every cover
+            // broken. This runs for anyone who took 0.9.0 before the paths
+            // were fixed, not only at the moment the folder moves.
+            if let Some(current) = data_dir.file_name().and_then(|name| name.to_str()) {
+                match db::repoint_data_dir(&conn, LEGACY_IDENTIFIER, current) {
+                    Ok(0) => {}
+                    Ok(n) => eprintln!("repointed {n} stored paths after the rename"),
+                    Err(e) => eprintln!("could not repoint stored paths: {e}"),
+                }
+            }
+
             app.manage(db::Db(std::sync::Arc::new(Mutex::new(conn))));
 
             let media_root = data_dir.clone();

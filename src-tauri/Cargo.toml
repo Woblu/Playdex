@@ -1,6 +1,6 @@
 [package]
 name = "romcade"
-version = "0.9.0"
+version = "0.9.1"
 description = "A ROM library manager and emulator launcher."
 authors = ["Woblu"]
 edition = "2021"
