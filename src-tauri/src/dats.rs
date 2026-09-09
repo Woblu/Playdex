@@ -311,7 +311,7 @@ mod tests {
 
     fn temp_db() -> Connection {
         let dir = std::env::temp_dir().join(format!(
-            "playdex-dat-{}-{:?}",
+            "romcade-dat-{}-{:?}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -323,7 +323,7 @@ mod tests {
 
     fn write_sample() -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "playdex-datfile-{}-{:?}",
+            "romcade-datfile-{}-{:?}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -412,7 +412,7 @@ mod tests {
 
     #[test]
     fn refuses_a_file_that_is_not_a_dat() {
-        let dir = std::env::temp_dir().join(format!("playdex-notdat-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("romcade-notdat-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let path = dir.join("nope.xml");
         std::fs::write(&path, "<html><body>hello</body></html>").unwrap();

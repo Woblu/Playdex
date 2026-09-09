@@ -16,7 +16,7 @@ export type SkinName = "launchbox" | "switch" | "steam";
 export const SKINS: Array<{ value: SkinName; label: string; blurb: string }> = [
   {
     value: "launchbox",
-    label: "Playdex",
+    label: "Romcade",
     blurb: "A dense desktop library: sidebar, sortable grid, detail panel.",
   },
   {

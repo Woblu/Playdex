@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Playdex — ROM library manager and emulator launcher for Windows</title>
-<meta name="description" content="Playdex indexes the folders where you keep your ROMs, identifies each file by its contents, downloads box art and details, and launches games through RetroArch or a standalone emulator. Free, for Windows.">
-<link rel="canonical" href="https://woblu.github.io/Playdex/">
+<title>Romcade — ROM library manager and emulator launcher for Windows</title>
+<meta name="description" content="Romcade indexes the folders where you keep your ROMs, identifies each file by its contents, downloads box art and details, and launches games through RetroArch or a standalone emulator. Free, for Windows.">
+<link rel="canonical" href="https://woblu.github.io/Romcade/">
 <link rel="icon" href="logo.svg" type="image/svg+xml">
-<meta property="og:site_name" content="Playdex">
-<meta property="og:title" content="Playdex — ROM library manager and emulator launcher">
+<meta property="og:site_name" content="Romcade">
+<meta property="og:title" content="Romcade — ROM library manager and emulator launcher">
 <meta property="og:description" content="Indexes the folders where you keep your ROMs, identifies each file by its contents, downloads box art and details, and launches games through RetroArch or a standalone emulator.">
 <meta property="og:type" content="website">
-<meta property="og:url" content="https://woblu.github.io/Playdex/">
-<meta property="og:image" content="https://woblu.github.io/Playdex/og.jpg">
+<meta property="og:url" content="https://woblu.github.io/Romcade/">
+<meta property="og:image" content="https://woblu.github.io/Romcade/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="Playdex showing a row of game box art over blurred artwork.">
+<meta property="og:image:alt" content="Romcade showing a row of game box art over blurred artwork.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0b0e13">
 <style>
@@ -753,12 +753,12 @@ img.real { display: none; width: 100%; height: auto; }
   <div class="wrap nav-in">
     <a class="brand" href="#top">
       <img src="logo.svg" alt="">
-      Playdex
+      Romcade
     </a>
     <a class="link only-wide" href="#how">How it works</a>
     <a class="link only-wide" href="#layouts">Layouts</a>
     <a class="link only-wide" href="#features">Features</a>
-    <a class="link" href="https://github.com/Woblu/Playdex">GitHub</a>
+    <a class="link" href="https://github.com/Woblu/Romcade">GitHub</a>
     <a class="link" href="#download">Download</a>
   </div>
 </nav>
@@ -798,20 +798,20 @@ img.real { display: none; width: 100%; height: auto; }
   <div class="wrap">
     <div class="hero-in">
       <div class="hero-mark">
-        <img src="logo.svg" alt="Playdex">
+        <img src="logo.svg" alt="Romcade">
         <span>Windows &middot; free &middot; open source</span>
       </div>
       <h1>A ROM library manager<br><span class="accent">and emulator launcher.</span></h1>
       <p class="lede">
-        Point Playdex at the folders where you keep your ROMs. It identifies each
+        Point Romcade at the folders where you keep your ROMs. It identifies each
         file by its contents, downloads box art and details, and launches the game
         in RetroArch or a standalone emulator. Playtime is recorded per game.
       </p>
       <div class="cta">
-        <a class="btn btn-primary" href="https://github.com/Woblu/Playdex/releases/latest">
+        <a class="btn btn-primary" href="https://github.com/Woblu/Romcade/releases/latest">
           Download for Windows
         </a>
-        <a class="btn btn-ghost" href="https://github.com/Woblu/Playdex">Source on GitHub</a>
+        <a class="btn btn-ghost" href="https://github.com/Woblu/Romcade">Source on GitHub</a>
       </div>
     </div>
   </div>
@@ -824,10 +824,10 @@ img.real { display: none; width: 100%; height: auto; }
     <div class="shot" data-shot-wrap>
       <img class="real" data-shot="shots/library.webp" decoding="async"
            width="2048" height="1095"
-           alt="Playdex in the Console layout: a row of large box art over blurred artwork, with the selected game named underneath.">
+           alt="Romcade in the Console layout: a row of large box art over blurred artwork, with the selected game named underneath.">
       <div class="drawn shot-bar" aria-hidden="true">
         <i></i><i></i><i></i>
-        <b>Playdex</b>
+        <b>Romcade</b>
       </div>
       <div class="drawn shot-body" aria-hidden="true">
         <div class="shot-side">
@@ -869,7 +869,7 @@ img.real { display: none; width: 100%; height: auto; }
           <span class="num" aria-hidden="true">01</span>
           <h3>Identification by contents</h3>
           <p>
-            Playdex opens each file and reads it: headers, disc filesystems, and
+            Romcade opens each file and reads it: headers, disc filesystems, and
             the entries inside an archive. Filenames and folder names are only
             consulted once the bytes have failed to settle it.
           </p>
@@ -905,7 +905,7 @@ img.real { display: none; width: 100%; height: auto; }
         <p class="lede">
           <code>.bin</code>, <code>.iso</code> and <code>.chd</code> are shared
           across a dozen systems, so an extension rarely settles anything on its
-          own. Playdex works down a list and stops at the first step that gives a
+          own. Romcade works down a list and stops at the first step that gives a
           definite answer.
         </p>
       </div>
@@ -932,7 +932,7 @@ img.real { display: none; width: 100%; height: auto; }
             A Wii dump carries <code>5D1C9EA3</code> at offset <code>0x18</code>;
             a GameCube disc carries <code>C2339F3D</code> at <code>0x1C</code>.
             Saturn, Dreamcast and Mega CD each write their name into the first
-            sector. Sony discs declare nothing in a header, so Playdex reads the
+            sector. Sony discs declare nothing in a header, so Romcade reads the
             disc's own filesystem and the boot file it names. Only the first
             kilobyte is read.
           </li>
@@ -980,8 +980,8 @@ img.real { display: none; width: 100%; height: auto; }
       <div class="skins">
         <div class="skin" data-shot-wrap>
                     <div class="draw">
-            <img class="real" data-shot="shots/skin-playdex.webp" decoding="async"
-                 width="1600" height="856" alt="The Playdex layout.">
+            <img class="real" data-shot="shots/skin-romcade.webp" decoding="async"
+                 width="1600" height="856" alt="The Romcade layout.">
             <div class="drawn mini" aria-hidden="true">
               <u class="rail"></u>
               <div class="cells">
@@ -991,7 +991,7 @@ img.real { display: none; width: 100%; height: auto; }
             <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
           </div>
           <div class="meta">
-            <h3>Playdex</h3>
+            <h3>Romcade</h3>
             <p>The desktop layout. A sidebar of systems, a sortable grid, and a detail panel for the current selection.</p>
           </div>
         </div>
@@ -1041,7 +1041,7 @@ img.real { display: none; width: 100%; height: auto; }
     <div class="wrap">
       <div class="section-head">
         <div class="eyebrow">Features</div>
-        <h2 id="features-h">What else Playdex does.</h2>
+        <h2 id="features-h">What else Romcade does.</h2>
       </div>
 
       <div class="cards">
@@ -1058,7 +1058,7 @@ img.real { display: none; width: 100%; height: auto; }
           <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="0" width="6" height="1"/><rect x="0" y="0" width="1" height="6"/><rect x="0" y="5" width="6" height="1"/><rect x="5" y="0" width="1" height="6"/><rect x="2" y="2" width="6" height="1"/><rect x="7" y="2" width="1" height="6"/><rect x="2" y="7" width="6" height="1"/><rect x="2" y="2" width="1" height="6"/></svg>
           <h3>Multi-disc games</h3>
           <p>
-            Several discs, one library entry. Playdex writes the playlist and the
+            Several discs, one library entry. Romcade writes the playlist and the
             emulator handles the swap when the game asks for the next disc.
           </p>
         </div>
@@ -1159,17 +1159,17 @@ img.real { display: none; width: 100%; height: auto; }
     <div class="wrap">
       <div class="get">
         <div class="eyebrow" style="text-align:center">Download</div>
-        <h2 id="download-h">Get Playdex.</h2>
+        <h2 id="download-h">Get Romcade.</h2>
         <p class="lede" style="margin-top:14px">
-          One installer, and very little setup. Playdex locates RetroArch on its
+          One installer, and very little setup. Romcade locates RetroArch on its
           own if you have it, and the first scan reports what it identified and
           what it could not.
         </p>
         <div class="cta">
-          <a class="btn btn-primary" href="https://github.com/Woblu/Playdex/releases/latest">
+          <a class="btn btn-primary" href="https://github.com/Woblu/Romcade/releases/latest">
             Download the latest release
           </a>
-          <a class="btn btn-ghost" href="https://github.com/Woblu/Playdex#readme">Documentation</a>
+          <a class="btn btn-ghost" href="https://github.com/Woblu/Romcade#readme">Documentation</a>
         </div>
         <div class="reqs">
           Windows 10 or 11 &nbsp;&middot;&nbsp; requires WebView2, which Windows 11 already includes<br>
@@ -1193,14 +1193,14 @@ img.real { display: none; width: 100%; height: auto; }
   <div class="wrap foot-in">
     <a class="brand" href="#top" style="margin-right:auto; font-size:15px">
       <img src="logo.svg" alt="">
-      Playdex
+      Romcade
     </a>
-    <a href="https://github.com/Woblu/Playdex">GitHub</a>
-    <a href="https://github.com/Woblu/Playdex/releases">Releases</a>
-    <a href="https://github.com/Woblu/Playdex/issues">Report a problem</a>
-    <a href="https://github.com/Woblu/Playdex/blob/master/LICENSE">MIT licence</a>
+    <a href="https://github.com/Woblu/Romcade">GitHub</a>
+    <a href="https://github.com/Woblu/Romcade/releases">Releases</a>
+    <a href="https://github.com/Woblu/Romcade/issues">Report a problem</a>
+    <a href="https://github.com/Woblu/Romcade/blob/master/LICENSE">MIT licence</a>
     <p class="scope">
-      Playdex organises and launches games that are already on your disk. It does
+      Romcade organises and launches games that are already on your disk. It does
       not locate, download or supply games, and none are bundled with it. Artwork
       and descriptions come from third-party metadata databases and remain the
       property of their respective owners.

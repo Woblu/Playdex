@@ -710,7 +710,7 @@ mod tests {
     #[test]
     fn drops_index_files_and_adopt_folders() {
         let dir = std::env::temp_dir().join(format!(
-            "playdex-drop-{}-{:?}",
+            "romcade-drop-{}-{:?}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -775,7 +775,7 @@ mod tests {
 
     fn scratch(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "playdex-{}-{}-{:?}",
+            "romcade-{}-{}-{:?}",
             tag,
             std::process::id(),
             std::time::SystemTime::now()
@@ -948,7 +948,7 @@ mod tests {
     #[test]
     fn bytes_beat_the_folder_and_the_filename() {
         let dir = std::env::temp_dir().join(format!(
-            "playdex-sig-{}-{:?}",
+            "romcade-sig-{}-{:?}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

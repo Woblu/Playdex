@@ -232,7 +232,7 @@ export default function SettingsModal({
     try {
       const found = await checkForUpdate(true);
       if (found) setUpdate(found);
-      else setUpdateNote("Playdex is up to date.");
+      else setUpdateNote("Romcade is up to date.");
     } catch (err) {
       // A button press deserves the real reason — no endpoint yet, no
       // network, a release without a manifest.
@@ -339,7 +339,7 @@ export default function SettingsModal({
           {tab === "folders" && (
             <>
               <div className="notice">
-                Playdex indexes ROMs already on your disk. Point it at the
+                Romcade indexes ROMs already on your disk. Point it at the
                 folders you keep them in. If a folder holds one system, set it
                 below — that resolves formats like <code>.bin</code>,{" "}
                 <code>.iso</code> and <code>.zip</code> that several consoles
@@ -772,14 +772,14 @@ export default function SettingsModal({
             <>
               <div className="notice">
                 A DAT is a catalogue of known-good dumps: for every release of a
-                system, its exact size and checksums. Import one and Playdex can
+                system, its exact size and checksums. Import one and Romcade can
                 tell you which of your files are correct dumps and which are
                 not, on the hashes it already computes for everything.
                 <br />
                 <br />
                 No-Intro covers cartridge systems and Redump covers discs.
                 Neither offers an API, so the files come from you: download the
-                DAT for a system once and point Playdex at it.
+                DAT for a system once and point Romcade at it.
               </div>
 
               <div className="row" style={{ marginTop: 12 }}>
@@ -898,7 +898,7 @@ export default function SettingsModal({
               <div className="section-title">About</div>
               <div className="about-row">
                 <div>
-                  <div className="about-version">Playdex {version || "…"}</div>
+                  <div className="about-version">Romcade {version || "…"}</div>
                   <div className="hint">
                     Updates are downloaded from the project&apos;s releases and
                     checked against a signature before anything is installed.
@@ -917,7 +917,7 @@ export default function SettingsModal({
 
               {update && (
                 <div className="notice" style={{ marginTop: 10 }}>
-                  <strong>Playdex {update.version} is available.</strong>
+                  <strong>Romcade {update.version} is available.</strong>
                   {update.notes && (
                     <div style={{ marginTop: 6, whiteSpace: "pre-wrap" }}>
                       {update.notes}
@@ -934,7 +934,7 @@ export default function SettingsModal({
                   download.phase === "installing" ? (
                     <div className="hint" style={{ marginTop: 8 }}>
                       {download.phase === "installing"
-                        ? "Installing — Playdex will restart."
+                        ? "Installing — Romcade will restart."
                         : download.total
                           ? `Downloading ${formatBytes(download.received)} of ${formatBytes(download.total)}…`
                           : `Downloading ${formatBytes(download.received)}…`}
@@ -995,7 +995,7 @@ export default function SettingsModal({
           {tab === "hacks" && (
             <>
               <div className="notice">
-                Import ROM hack patches in bulk and Playdex indexes them by
+                Import ROM hack patches in bulk and Romcade indexes them by
                 the checksum of the ROM each one was built for. A game's detail
                 panel then shows exactly which hacks your dump can run — no
                 guessing about revisions or regions.

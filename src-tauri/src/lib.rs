@@ -93,6 +93,58 @@ fn app_paths(state: State<AppState>) -> serde_json::Value {
     })
 }
 
+/// The bundle identifier Playdex shipped under, up to and including 0.8.1.
+///
+/// The app data directory is derived from the identifier, so renaming the app
+/// to Romcade moves it. Everything anyone has — the library database, their
+/// playtime, the artwork cache and the generated disc playlists — lives in
+/// that folder, so the first launch after updating carries it across instead
+/// of opening an empty library.
+const LEGACY_IDENTIFIER: &str = "com.boazv.playdex";
+
+/// Moves `old` to `new` if, and only if, there is something to move and
+/// nothing already at the destination.
+///
+/// Refusing to run when `new` exists is the whole safety argument: a Romcade
+/// library that is already in place can never be overwritten by a stale
+/// Playdex one, whatever order things happened in. Returns whether it moved
+/// anything.
+///
+/// Split out from the identifier lookup so it can be tested without standing
+/// up a Tauri app handle.
+fn move_data_dir(old: &std::path::Path, new: &std::path::Path) -> std::io::Result<bool> {
+    if new.exists() || !old.is_dir() {
+        return Ok(false);
+    }
+    if let Some(parent) = new.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::rename(old, new)?;
+    Ok(true)
+}
+
+/// Carries a pre-rename library across, if one is sitting next door.
+///
+/// A failure here is reported and then dropped. Being unable to move the old
+/// folder is a bad first launch; refusing to start at all is a worse one, and
+/// the old directory is left untouched either way, so nothing is lost that a
+/// later attempt could not still recover.
+fn migrate_legacy_data_dir(new_dir: &std::path::Path) {
+    let Some(parent) = new_dir.parent() else {
+        return;
+    };
+    let old_dir = parent.join(LEGACY_IDENTIFIER);
+    match move_data_dir(&old_dir, new_dir) {
+        Ok(true) => eprintln!(
+            "carried the library over from {} to {}",
+            old_dir.display(),
+            new_dir.display()
+        ),
+        Ok(false) => {}
+        Err(e) => eprintln!("could not carry the old Playdex library across: {e}"),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -109,6 +161,9 @@ pub fn run() {
                 .path()
                 .app_data_dir()
                 .expect("no app data directory available");
+            // Before anything creates the new directory, since the move only
+            // happens when there is nothing at the destination.
+            migrate_legacy_data_dir(&data_dir);
             std::fs::create_dir_all(&data_dir)?;
 
             let conn = db::open(&data_dir.join("library.db"))?;
@@ -118,7 +173,7 @@ pub fn run() {
             std::fs::create_dir_all(media_root.join("media"))?;
 
             let client = reqwest::Client::builder()
-                .user_agent(concat!("playdex/", env!("CARGO_PKG_VERSION")))
+                .user_agent(concat!("romcade/", env!("CARGO_PKG_VERSION")))
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("could not build http client");
@@ -198,4 +253,60 @@ pub fn run() {
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
+}
+
+
+#[cfg(test)]
+mod migration_tests {
+    use super::move_data_dir;
+
+    fn scratch(name: &str) -> std::path::PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "romcade-migrate-{}-{}",
+            name,
+            std::process::id()
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        dir
+    }
+
+    #[test]
+    fn carries_an_old_library_across() {
+        let base = scratch("move");
+        let old = base.join("com.boazv.playdex");
+        let new = base.join("com.boazv.romcade");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("library.db"), b"library").unwrap();
+
+        assert!(move_data_dir(&old, &new).unwrap());
+        assert_eq!(std::fs::read(new.join("library.db")).unwrap(), b"library");
+        assert!(!old.exists());
+
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn refuses_to_overwrite_an_existing_library() {
+        let base = scratch("keep");
+        let old = base.join("com.boazv.playdex");
+        let new = base.join("com.boazv.romcade");
+        std::fs::create_dir_all(&old).unwrap();
+        std::fs::write(old.join("library.db"), b"old").unwrap();
+        std::fs::create_dir_all(&new).unwrap();
+        std::fs::write(new.join("library.db"), b"new").unwrap();
+
+        assert!(!move_data_dir(&old, &new).unwrap());
+        assert_eq!(std::fs::read(new.join("library.db")).unwrap(), b"new");
+        assert!(old.exists());
+
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    #[test]
+    fn does_nothing_on_a_fresh_install() {
+        let base = scratch("fresh");
+        let new = base.join("com.boazv.romcade");
+        assert!(!move_data_dir(&base.join("com.boazv.playdex"), &new).unwrap());
+        assert!(!new.exists());
+    }
 }

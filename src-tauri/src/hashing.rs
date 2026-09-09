@@ -334,7 +334,7 @@ mod tests {
 
     fn scratch(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "playdex-hash-{}-{}-{:?}",
+            "romcade-hash-{}-{}-{:?}",
             tag,
             std::process::id(),
             std::time::SystemTime::now()

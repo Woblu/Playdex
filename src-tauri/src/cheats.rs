@@ -334,7 +334,7 @@ cheat1_enable = false
     /// region tag — so both names have to be written.
     #[test]
     fn writes_under_every_name_retroarch_might_use() {
-        let dir = std::env::temp_dir().join(format!("playdex-cht-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("romcade-cht-{}", std::process::id()));
         let _ = std::fs::remove_dir_all(&dir);
         let core = dir.join("Mesen");
         std::fs::create_dir_all(&core).unwrap();
@@ -699,7 +699,7 @@ mod retroarch_tests {
     #[test]
     fn playing_a_game_writes_its_cheats_and_arms_retroarch() {
         let dir = std::env::temp_dir().join(format!(
-            "playdex-sync-{}-{:?}",
+            "romcade-sync-{}-{:?}",
             std::process::id(),
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -794,7 +794,7 @@ cheat_database_path = \":\\cheats\"
 
     #[test]
     fn expands_retroarchs_colon_relative_paths() {
-        let dir = std::env::temp_dir().join(format!("playdex-racfg-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("romcade-racfg-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let exe = dir.join("retroarch.exe");
         std::fs::write(&exe, b"").unwrap();
@@ -817,7 +817,7 @@ cheat_database_path = \":\\cheats\"
 
     #[test]
     fn turning_auto_apply_on_rewrites_only_that_line() {
-        let dir = std::env::temp_dir().join(format!("playdex-raflip-{}", std::process::id()));
+        let dir = std::env::temp_dir().join(format!("romcade-raflip-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         let exe = dir.join("retroarch.exe");
         std::fs::write(&exe, b"").unwrap();
