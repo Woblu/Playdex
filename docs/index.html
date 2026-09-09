@@ -150,8 +150,18 @@ p { margin: 0; }
 }
 
 .section {
+  position: relative;
   padding: clamp(64px, 9vw, 116px) 0;
-  border-top: 1px solid var(--line-soft);
+}
+/* A dashed rule made of hard 6px steps, so even the divider between sections
+   is drawn at the same resolution as everything else on the page. */
+.section::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: repeating-linear-gradient(
+    90deg, var(--line) 0 6px, transparent 6px 12px);
 }
 
 .section-head { max-width: 68ch; margin-bottom: 44px; }
@@ -371,12 +381,18 @@ img.real { display: none; width: 100%; height: auto; }
    shape is the point and a real library's artwork belongs to the people who
    made those games. */
 .shot {
-  margin-top: clamp(56px, 7vw, 84px);
+  /* Pulled up over the hero's brick line. Sitting in the black underneath it
+     left the screenshot floating with nothing to belong to; overlapping the
+     ground ties it to the scene above and closes the dead gap. */
+  position: relative;
+  margin-top: clamp(-104px, -7vw, -52px);
+  z-index: 1;
   border: 1px solid var(--line);
   border-radius: 12px;
   overflow: hidden;
   background: var(--ink-2);
-  box-shadow: 0 30px 70px -30px rgba(0, 0, 0, 0.85);
+  box-shadow: 0 34px 80px -24px rgba(0, 0, 0, 0.95),
+              0 0 0 6px rgba(11, 14, 19, 0.55);
 }
 .shot img.real { border-radius: 11px; }
 .shot-bar {
@@ -457,10 +473,19 @@ img.real { display: none; width: 100%; height: auto; }
 .pillar .num {
   font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 0.16em;
+  letter-spacing: 0.08em;
   color: var(--sky);
-  display: block;
-  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 16px;
+  border: 2px solid var(--sky-deep);
+  background: rgba(92, 148, 252, 0.10);
+  /* Hard offset shadow, no blur and no radius: the same drop shadow a sprite
+     gets, rather than the soft one a web card gets. */
+  box-shadow: 3px 3px 0 rgba(92, 148, 252, 0.15);
 }
 
 /* ---------------------------------------------------------- the cascade */
@@ -482,9 +507,12 @@ img.real { display: none; width: 100%; height: auto; }
   width: 12px; height: 12px;
   background: var(--ink);
   border: 2px solid var(--line-soft);
-  border-radius: 3px;
 }
-.steps li.win::before { background: var(--sky); border-color: var(--sky); }
+.steps li.win::before {
+  background: var(--sky);
+  border-color: var(--sky);
+  box-shadow: 0 0 0 4px rgba(92, 148, 252, 0.14);
+}
 .steps li b { color: var(--text); font-weight: 600; display: block; margin-bottom: 3px; }
 
 .quote {
@@ -535,7 +563,35 @@ img.real { display: none; width: 100%; height: auto; }
 .cards { display: grid; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
 @media (min-width: 700px) { .cards { grid-template-columns: repeat(2, 1fr); } }
 @media (min-width: 1000px) { .cards { grid-template-columns: repeat(3, 1fr); } }
-.card { background: var(--ink); padding: 26px 24px; }
+.card {
+  position: relative;
+  background: var(--ink);
+  padding: 26px 24px;
+  transition: background 0.16s;
+}
+.card:hover { background: var(--ink-2); }
+/* Wipes in from the left on hover. */
+.card::before {
+  content: "";
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--sky);
+  transform: scaleX(0);
+  transform-origin: left;
+  transition: transform 0.2s ease;
+}
+.card:hover::before { transform: scaleX(1); }
+.card .ico {
+  width: 22px;
+  height: 22px;
+  display: block;
+  margin-bottom: 15px;
+  fill: var(--sky);
+  opacity: 0.85;
+  transition: opacity 0.16s;
+}
+.card:hover .ico { opacity: 1; }
 .card h3 { margin-bottom: 9px; }
 .card p { color: var(--muted); font-size: 14.5px; }
 
@@ -577,6 +633,109 @@ img.real { display: none; width: 100%; height: auto; }
   font-size: 13.5px;
   border-left: 2px solid var(--line);
   padding-left: 14px;
+}
+
+/* ------------------------------------------------------------ enlarging
+   A screenshot is the one thing on the page worth seeing bigger, so every
+   real one gets an invisible button over it. The drawn stand-ins do not:
+   there is nothing behind them to enlarge. */
+.shot, .skin .draw { position: relative; }
+.zoom {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: zoom-in;
+}
+.zoom[hidden] { display: none; }
+.zoom::after {
+  content: "Enlarge";
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text);
+  background: rgba(11, 14, 19, 0.86);
+  border: 1px solid var(--line);
+  padding: 5px 9px;
+  opacity: 0;
+  transform: translateY(4px);
+  transition: opacity 0.16s, transform 0.16s;
+}
+.zoom:hover::after,
+.zoom:focus-visible::after { opacity: 1; transform: none; }
+
+.skin { transition: border-color 0.16s, transform 0.16s; }
+.skin:has(.zoom:hover) { border-color: var(--sky-deep); transform: translateY(-2px); }
+
+/* ------------------------------------------------------------- lightbox */
+.lb {
+  max-width: min(1500px, 94vw);
+  max-height: 94vh;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  overflow: visible;
+  color: var(--text);
+}
+.lb::backdrop { background: rgba(4, 6, 10, 0.88); }
+.lb-in { position: relative; }
+.lb img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: 84vh;
+  object-fit: contain;
+  border: 1px solid var(--line);
+  background: var(--ink-2);
+}
+.lb-cap {
+  margin: 12px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: var(--muted);
+  max-width: 76ch;
+}
+.lb-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 2;
+  width: 34px;
+  height: 34px;
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--text);
+  background: rgba(11, 14, 19, 0.84);
+  border: 1px solid var(--line);
+  transition: background 0.15s, border-color 0.15s;
+}
+.lb-close:hover { background: var(--ink); border-color: var(--sky-deep); }
+
+/* --------------------------------------------------- download, grounded
+   The page opened on sky over brick. It closes the same way, so the last
+   panel is the first one again rather than a plain box. */
+.get {
+  position: relative;
+  overflow: hidden;
+  padding-bottom: calc(clamp(34px, 5vw, 56px) + 30px);
+}
+.get::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 22px;
+  image-rendering: pixelated;
+  opacity: 0.5;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='128' height='56' shape-rendering='crispEdges'%3E%3Crect width='128' height='56' fill='%238b3a0a'/%3E%3Crect width='128' height='4' fill='%23d06a1c'/%3E%3Crect y='26' width='128' height='4' fill='%232a1505'/%3E%3Crect x='12' width='4' height='26' fill='%232a1505'/%3E%3Crect x='76' width='4' height='26' fill='%232a1505'/%3E%3Crect x='44' y='30' width='4' height='26' fill='%232a1505'/%3E%3Crect x='108' y='30' width='4' height='26' fill='%232a1505'/%3E%3C/svg%3E") repeat-x top left;
+  background-size: 128px 56px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -697,6 +856,7 @@ img.real { display: none; width: 100%; height: auto; }
           <div class="bar w40"></div>
         </div>
       </div>
+      <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
     </div>
   </div>
 
@@ -821,13 +981,14 @@ img.real { display: none; width: 100%; height: auto; }
         <div class="skin" data-shot-wrap>
           <div class="draw">
             <img class="real" data-shot="shots/skin-playdex.webp" decoding="async"
-                 width="800" height="428" alt="The Playdex layout.">
+                 width="1600" height="856" alt="The Playdex layout.">
             <div class="drawn mini" aria-hidden="true">
               <u class="rail"></u>
               <div class="cells">
                 <u></u><u></u><u></u><u></u><u></u><u></u><u></u><u></u>
               </div>
-            </div>
+                        <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
+          </div>
           </div>
           <div class="meta">
             <h3>Playdex</h3>
@@ -838,11 +999,12 @@ img.real { display: none; width: 100%; height: auto; }
         <div class="skin" data-shot-wrap>
           <div class="draw">
             <img class="real" data-shot="shots/skin-console.webp" decoding="async"
-                 width="800" height="428" alt="The Console layout.">
+                 width="1600" height="856" alt="The Console layout.">
             <div class="drawn mini" aria-hidden="true">
               <div class="col">
                 <div class="icons"><u></u><u class="mid"></u><u></u></div>
-                <div class="strip"><u></u><u></u><u></u><u></u><u></u></div>
+                <div class="strip"><u></u><u></u><u></u><u></u><u></u>            <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
+          </div>
               </div>
             </div>
           </div>
@@ -855,12 +1017,13 @@ img.real { display: none; width: 100%; height: auto; }
         <div class="skin" data-shot-wrap>
           <div class="draw">
             <img class="real" data-shot="shots/skin-bigpicture.webp" decoding="async"
-                 width="800" height="428" alt="The Big Picture layout.">
+                 width="1600" height="856" alt="The Big Picture layout.">
             <div class="drawn mini" aria-hidden="true">
               <u class="rail"></u>
               <div class="col">
                 <div class="big"></div>
-                <div class="strip"><u></u><u></u><u></u><u></u></div>
+                <div class="strip"><u></u><u></u><u></u><u></u>            <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
+          </div>
               </div>
             </div>
           </div>
@@ -883,6 +1046,7 @@ img.real { display: none; width: 100%; height: auto; }
 
       <div class="cards">
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="1" width="8" height="1"/><rect x="0" y="6" width="8" height="1"/><rect x="0" y="1" width="1" height="6"/><rect x="7" y="1" width="1" height="6"/><rect x="2" y="4" width="2" height="2"/><rect x="4" y="3" width="2" height="3"/></svg>
           <h3>Artwork and metadata</h3>
           <p>
             libretro-thumbnails supplies box art with no account or API key.
@@ -891,6 +1055,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="0" width="6" height="1"/><rect x="0" y="0" width="1" height="6"/><rect x="0" y="5" width="6" height="1"/><rect x="5" y="0" width="1" height="6"/><rect x="2" y="2" width="6" height="1"/><rect x="7" y="2" width="1" height="6"/><rect x="2" y="7" width="6" height="1"/><rect x="2" y="2" width="1" height="6"/></svg>
           <h3>Multi-disc games</h3>
           <p>
             Several discs, one library entry. Playdex writes the playlist and the
@@ -898,6 +1063,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="0" width="2" height="8"/><rect x="0" y="3" width="8" height="2"/><rect x="1" y="1" width="1" height="1"/><rect x="6" y="1" width="1" height="1"/><rect x="1" y="6" width="1" height="1"/><rect x="6" y="6" width="1" height="1"/></svg>
           <h3>Cheats</h3>
           <p>
             Cheats are listed per game. Enable the ones you want and the codes are
@@ -906,6 +1072,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="0" width="8" height="1"/><rect x="0" y="7" width="8" height="1"/><rect x="0" y="0" width="1" height="8"/><rect x="7" y="0" width="1" height="8"/><rect x="3" y="2" width="2" height="4"/><rect x="2" y="3" width="4" height="2"/></svg>
           <h3>ROM hacks</h3>
           <p>
             IPS, UPS and BPS patches are applied to a copy of a ROM in your
@@ -914,6 +1081,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="3" width="2" height="2"/><rect x="2" y="5" width="2" height="2"/><rect x="4" y="3" width="2" height="2"/><rect x="6" y="1" width="2" height="2"/></svg>
           <h3>Dump verification</h3>
           <p>
             Import a No-Intro or Redump catalogue and every game's panel reports
@@ -922,6 +1090,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="0" width="8" height="1"/><rect x="0" y="7" width="8" height="1"/><rect x="0" y="0" width="1" height="8"/><rect x="7" y="0" width="1" height="8"/><rect x="2" y="1" width="4" height="2"/><rect x="2" y="5" width="4" height="2"/></svg>
           <h3>Saves and save states</h3>
           <p>
             Collected from the configured save directories, RetroArch's per-core
@@ -930,6 +1099,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="2" width="6" height="1"/><rect x="0" y="3" width="1" height="3"/><rect x="7" y="3" width="1" height="3"/><rect x="1" y="6" width="6" height="1"/><rect x="2" y="4" width="2" height="1"/><rect x="5" y="4" width="1" height="1"/></svg>
           <h3>Controller support</h3>
           <p>
             A connected pad drives the entire app, Settings included. Focus moves
@@ -937,6 +1107,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="3" y="0" width="2" height="3"/><rect x="1" y="3" width="6" height="1"/><rect x="2" y="4" width="4" height="1"/><rect x="3" y="5" width="2" height="1"/><rect x="0" y="7" width="8" height="1"/></svg>
           <h3>Drag and drop</h3>
           <p>
             Drop a ROM anywhere on the window and it is indexed where it already
@@ -945,6 +1116,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="2" y="0" width="4" height="1"/><rect x="1" y="1" width="1" height="1"/><rect x="6" y="1" width="1" height="1"/><rect x="0" y="2" width="1" height="4"/><rect x="7" y="2" width="1" height="4"/><rect x="1" y="6" width="1" height="1"/><rect x="6" y="6" width="1" height="1"/><rect x="2" y="7" width="4" height="1"/><rect x="3" y="2" width="1" height="3"/><rect x="4" y="4" width="2" height="1"/></svg>
           <h3>Playtime</h3>
           <p>
             Every session is timed and recorded against the game. The library
@@ -953,6 +1125,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="1" y="0" width="6" height="1"/><rect x="0" y="1" width="1" height="4"/><rect x="7" y="1" width="1" height="4"/><rect x="1" y="5" width="1" height="1"/><rect x="6" y="5" width="1" height="1"/><rect x="2" y="6" width="4" height="1"/><rect x="3" y="7" width="2" height="1"/><rect x="3" y="2" width="2" height="2"/></svg>
           <h3>Signed updates</h3>
           <p>
             New versions are announced in the app with their release notes, and
@@ -961,6 +1134,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="0" width="8" height="2"/><rect x="0" y="3" width="8" height="2"/><rect x="0" y="6" width="8" height="2"/></svg>
           <h3>A local library</h3>
           <p>
             Everything lives in a SQLite database in the app data directory,
@@ -969,6 +1143,7 @@ img.real { display: none; width: 100%; height: auto; }
           </p>
         </div>
         <div class="card">
+          <svg class="ico" viewBox="0 0 8 8" shape-rendering="crispEdges" aria-hidden="true"><rect x="0" y="1" width="3" height="1"/><rect x="0" y="2" width="8" height="1"/><rect x="0" y="2" width="1" height="5"/><rect x="7" y="2" width="1" height="5"/><rect x="0" y="6" width="8" height="1"/></svg>
           <h3>Your files stay put</h3>
           <p>
             ROMs are indexed where they already are, never copied or moved.
@@ -1006,6 +1181,14 @@ img.real { display: none; width: 100%; height: auto; }
 
 </main>
 
+<dialog id="lightbox" class="lb" aria-label="Screenshot">
+  <div class="lb-in">
+    <button class="lb-close" type="button" aria-label="Close">&times;</button>
+    <img alt="">
+    <p class="lb-cap"></p>
+  </div>
+</dialog>
+
 <footer class="foot">
   <div class="wrap foot-in">
     <a class="brand" href="#top" style="margin-right:auto; font-size:15px">
@@ -1036,11 +1219,47 @@ img.real { display: none; width: 100%; height: auto; }
       probe.onload = function () {
         img.src = img.getAttribute("data-shot");
         var wrap = img.closest("[data-shot-wrap]");
-        if (wrap) wrap.classList.add("has-shot");
+        if (!wrap) return;
+        wrap.classList.add("has-shot");
+        // Only a real screenshot is worth enlarging. The drawn stand-in has
+        // nothing more to show at a larger size, so its button stays hidden.
+        var zoom = wrap.querySelector(".zoom");
+        if (zoom) zoom.hidden = false;
       };
       probe.src = img.getAttribute("data-shot");
     }
   );
+
+  // Lightbox. <dialog> is doing the work here: it traps focus, closes on
+  // Escape and restores focus to the button that opened it, none of which is
+  // worth reimplementing.
+  var lb = document.getElementById("lightbox");
+  var lbImg = lb.querySelector("img");
+  var lbCap = lb.querySelector(".lb-cap");
+
+  document.addEventListener("click", function (e) {
+    var t = e.target;
+    if (!t.closest) return;
+
+    var zoom = t.closest(".zoom");
+    if (zoom) {
+      var img = zoom.closest("[data-shot-wrap]").querySelector("img.real");
+      if (!img || !img.getAttribute("src")) return;
+      lbImg.src = img.src;
+      lbImg.alt = img.alt;
+      lbCap.textContent = img.alt;
+      if (lb.showModal) lb.showModal();
+      return;
+    }
+
+    // The close button, or the backdrop, which is the dialog itself once the
+    // click has missed everything inside it.
+    if (t.closest(".lb-close") || t === lb) lb.close();
+  });
+
+  lb.addEventListener("close", function () {
+    lbImg.removeAttribute("src");
+  });
 
   // The nav only grows a border once it is actually sitting over content.
   var nav = document.getElementById("nav");
