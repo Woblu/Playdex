@@ -15,7 +15,7 @@
 <meta property="og:image" content="https://woblu.github.io/Playdex/og.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
-<meta property="og:image:alt" content="The Playdex library, showing systems in a sidebar beside a grid of box art.">
+<meta property="og:image:alt" content="Playdex showing a row of game box art over blurred artwork.">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0b0e13">
 <style>
@@ -66,7 +66,7 @@ body {
   text-rendering: optimizeLegibility;
 }
 
-img { max-width: 100%; }
+img { max-width: 100%; height: auto; }
 
 a { color: var(--sky-bright); }
 
@@ -237,9 +237,18 @@ p { margin: 0; }
   pointer-events: none;
 }
 .cloud svg { display: block; }
-.c1 { top: 15%; left: 4%;   width: 168px; animation: drift 34s ease-in-out infinite alternate; }
-.c2 { top: 33%; left: 34%;  width: 104px; opacity: .5;  animation: drift 46s ease-in-out infinite alternate-reverse; }
-.c3 { top: 21%; left: 71%;  width: 140px; opacity: .72; animation: drift 40s ease-in-out infinite alternate; }
+/* Kept clear of the text column, which is 720px hard against the left edge.
+   A white cloud behind white headline text is unreadable, and the headline is
+   the one thing on the page that has to be. */
+.c1 { top: 9%;  left: 66%; width: 160px; animation: drift 34s ease-in-out infinite alternate; }
+.c2 { top: 46%; left: 82%; width: 104px; opacity: .5;  animation: drift 46s ease-in-out infinite alternate-reverse; }
+.c3 { top: 24%; left: 86%; width: 132px; opacity: .72; animation: drift 40s ease-in-out infinite alternate; }
+
+/* Below this the text runs full width and there is nowhere safe to put them,
+   so they drop back to being texture rather than shapes. */
+@media (max-width: 900px) {
+  .c1, .c2, .c3 { opacity: 0.22; }
+}
 @keyframes drift {
   from { transform: translateX(-14px); }
   to   { transform: translateX(14px); }
@@ -353,7 +362,7 @@ p { margin: 0; }
 
    Doing it this way round means the page is never broken and never shows an
    empty box, whether or not anybody has got round to taking screenshots. */
-img.real { display: none; width: 100%; }
+img.real { display: none; width: 100%; height: auto; }
 .has-shot img.real { display: block; }
 .has-shot .drawn { display: none; }
 
@@ -656,7 +665,7 @@ img.real { display: none; width: 100%; }
     <div class="shot" data-shot-wrap>
       <img class="real" data-shot="shots/library.webp" decoding="async"
            width="2048" height="1095"
-           alt="The Playdex library: systems down the left, a grid of games, and a detail panel on the right.">
+           alt="Playdex in the Console layout: a row of large box art over blurred artwork, with the selected game named underneath.">
       <div class="drawn shot-bar" aria-hidden="true">
         <i></i><i></i><i></i>
         <b>Playdex</b>
