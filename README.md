@@ -522,3 +522,11 @@ you.
   before it does.
 - The library lives in the app data directory next to the artwork cache, so
   deleting that folder resets everything without touching your ROMs.
+
+## License
+
+MIT. See [LICENSE](LICENSE).
+
+Playdex bundles no games, no BIOS files and no DAT catalogues. Artwork and
+descriptions are fetched at runtime from third-party metadata providers and
+belong to their respective owners.

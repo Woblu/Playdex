@@ -2,6 +2,7 @@
   "name": "playdex",
   "private": true,
   "version": "0.8.1",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",

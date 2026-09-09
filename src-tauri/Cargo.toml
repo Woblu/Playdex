@@ -1,9 +1,11 @@
 [package]
 name = "playdex"
 version = "0.8.1"
-description = "A Tauri App"
-authors = ["you"]
+description = "A ROM library manager and emulator launcher."
+authors = ["Woblu"]
 edition = "2021"
+license = "MIT"
+repository = "https://github.com/Woblu/Playdex"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 

@@ -12,7 +12,11 @@
 <meta property="og:description" content="Indexes the folders where you keep your ROMs, identifies each file by its contents, downloads box art and details, and launches games through RetroArch or a standalone emulator.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://woblu.github.io/Playdex/">
-<meta name="twitter:card" content="summary">
+<meta property="og:image" content="https://woblu.github.io/Playdex/og.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:image:alt" content="The Playdex library, showing systems in a sidebar beside a grid of box art.">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#0b0e13">
 <style>
 /* ------------------------------------------------------------------ tokens
@@ -627,7 +631,7 @@ img.real { display: none; width: 100%; }
     <div class="hero-in">
       <div class="hero-mark">
         <img src="logo.svg" alt="Playdex">
-        <span>Windows &middot; free &middot; source on GitHub</span>
+        <span>Windows &middot; free &middot; open source</span>
       </div>
       <h1>A ROM library manager<br><span class="accent">and emulator launcher.</span></h1>
       <p class="lede">
@@ -650,7 +654,8 @@ img.real { display: none; width: 100%; }
   <!-- ------------------------------------------------------------- shot -->
   <div class="wrap">
     <div class="shot" data-shot-wrap>
-      <img class="real" data-shot="shots/library.png" decoding="async"
+      <img class="real" data-shot="shots/library.webp" decoding="async"
+           width="2048" height="1095"
            alt="The Playdex library: systems down the left, a grid of games, and a detail panel on the right.">
       <div class="drawn shot-bar" aria-hidden="true">
         <i></i><i></i><i></i>
@@ -806,7 +811,8 @@ img.real { display: none; width: 100%; }
       <div class="skins">
         <div class="skin" data-shot-wrap>
           <div class="draw">
-            <img class="real" data-shot="shots/skin-playdex.png" decoding="async" alt="The Playdex layout.">
+            <img class="real" data-shot="shots/skin-playdex.webp" decoding="async"
+                 width="800" height="428" alt="The Playdex layout.">
             <div class="drawn mini" aria-hidden="true">
               <u class="rail"></u>
               <div class="cells">
@@ -822,7 +828,8 @@ img.real { display: none; width: 100%; }
 
         <div class="skin" data-shot-wrap>
           <div class="draw">
-            <img class="real" data-shot="shots/skin-console.png" decoding="async" alt="The Console layout.">
+            <img class="real" data-shot="shots/skin-console.webp" decoding="async"
+                 width="800" height="428" alt="The Console layout.">
             <div class="drawn mini" aria-hidden="true">
               <div class="col">
                 <div class="icons"><u></u><u class="mid"></u><u></u></div>
@@ -838,7 +845,8 @@ img.real { display: none; width: 100%; }
 
         <div class="skin" data-shot-wrap>
           <div class="draw">
-            <img class="real" data-shot="shots/skin-bigpicture.png" decoding="async" alt="The Big Picture layout.">
+            <img class="real" data-shot="shots/skin-bigpicture.webp" decoding="async"
+                 width="800" height="428" alt="The Big Picture layout.">
             <div class="drawn mini" aria-hidden="true">
               <u class="rail"></u>
               <div class="col">
@@ -981,7 +989,7 @@ img.real { display: none; width: 100%; }
         </div>
         <div class="reqs">
           Windows 10 or 11 &nbsp;&middot;&nbsp; requires WebView2, which Windows 11 already includes<br>
-          Free &nbsp;&middot;&nbsp; no account required &nbsp;&middot;&nbsp; source on GitHub
+          Free and open source (MIT) &nbsp;&middot;&nbsp; no account required
         </div>
       </div>
     </div>
@@ -998,6 +1006,7 @@ img.real { display: none; width: 100%; }
     <a href="https://github.com/Woblu/Playdex">GitHub</a>
     <a href="https://github.com/Woblu/Playdex/releases">Releases</a>
     <a href="https://github.com/Woblu/Playdex/issues">Report a problem</a>
+    <a href="https://github.com/Woblu/Playdex/blob/master/LICENSE">MIT licence</a>
     <p class="scope">
       Playdex organises and launches games that are already on your disk. It does
       not locate, download or supply games, and none are bundled with it. Artwork

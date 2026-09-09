@@ -35,3 +35,7 @@ dist-ssr
 # Updater signing keys, if one is ever generated in-tree by accident.
 *.key
 *.key.pub
+
+# Source screenshots. Only the optimised .webp the site actually loads is
+# committed; the full-size PNGs they are built from stay local.
+/docs/shots/*.png
