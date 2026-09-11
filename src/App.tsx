@@ -25,9 +25,8 @@ import LaunchboxShell from "./skins/LaunchboxShell";
 import SwitchShell from "./skins/SwitchShell";
 import SteamShell from "./skins/SteamShell";
 import ArcShell from "./skins/ArcShell";
-import BladesShell from "./skins/BladesShell";
-import ShowcaseShell from "./skins/ShowcaseShell";
 import BrowserShell from "./skins/BrowserShell";
+import WiiShell from "./skins/WiiShell";
 import {
   DEFAULT_SKIN,
   isSkin,
@@ -59,8 +58,7 @@ const SHELLS: Record<SkinName, React.ComponentType<ShellProps>> = {
   switch: SwitchShell,
   steam: SteamShell,
   arc: ArcShell,
-  blades: BladesShell,
-  showcase: ShowcaseShell,
+  wii: WiiShell,
   browser: BrowserShell,
 };
 

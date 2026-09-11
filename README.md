@@ -1,6 +1,6 @@
-# Romcade
+# Playdex
 
-[romcade website](https://woblu.github.io/Romcade/) · [download](https://github.com/Woblu/Romcade/releases/latest)
+[playdex website](https://woblu.github.io/Playdex/) · [download](https://github.com/Woblu/Playdex/releases/latest)
 
 A ROM library manager and emulator launcher. Point it at the folders where you
 keep your ROMs. It identifies each one, pulls down cover art and details, and
@@ -11,7 +11,7 @@ Tauri 2 (Rust) + React + TypeScript, with SQLite for the library.
 
 ## Scope
 
-Romcade indexes ROMs you already have on disk. It doesn't search for or
+Playdex indexes ROMs you already have on disk. It doesn't search for or
 download games. ScreenScraper and TheGamesDB are metadata databases: they serve
 artwork and descriptions for games they can identify, not the games themselves.
 
@@ -63,7 +63,7 @@ for those rules to drift.
 A disc game that has not been zipped is usually a folder holding a playlist and
 its tracks: `Final Fantasy VII.cue` beside three or four `.bin` files. That is
 one game, and the cue is the part an emulator wants, so that is the part
-Romcade indexes. Tracks named by a playlist in the same folder are skipped, as
+Playdex indexes. Tracks named by a playlist in the same folder are skipped, as
 is any leftover track-shaped file sitting beside one, since dumps get renamed
 and a stray `.bin` next to a cue sheet was never a second game.
 
@@ -103,7 +103,7 @@ why.
 ### Platform detection
 
 `.bin`, `.cue`, `.iso`, `.chd` and `.zip` are shared across a dozen systems, so
-extensions alone don't settle it. Romcade works through this order:
+extensions alone don't settle it. Playdex works through this order:
 
 1. The platform assigned to the library folder, if you set one
 2. An extension only one system uses (`.sfc`, `.gba`, `.nes`)
@@ -170,7 +170,7 @@ exactly instead of by fuzzy name. If it has no match or its quota is spent,
 TheGamesDB is tried by name: results are scored against the cleaned-up title,
 boosted when the platform agrees, and a weak match is discarded rather than
 guessed at. Both providers report which system they matched, which fills in a
-platform Romcade couldn't work out on its own. A platform already on the record
+platform Playdex couldn't work out on its own. A platform already on the record
 is left alone since you may have set it by hand.
 
 Artwork downloads once into the app data directory and is served to the UI over
@@ -183,7 +183,7 @@ checksums. Import one under **Settings → Verification** and every game's panel
 says whether its checksums match a catalogued dump, whether nothing in the
 catalogue has them, or whether it was too large to have been hashed at all.
 
-This is what all the hashing was for. Romcade already computes CRC32, MD5 and
+This is what all the hashing was for. Playdex already computes CRC32, MD5 and
 SHA-1 for everything in one pass, and hashes the ROM *inside* an archive rather
 than the archive, which is exactly what a DAT indexes — so checking is close to
 a database join.
@@ -203,11 +203,11 @@ also any system you simply have not imported a DAT for.
 
 ### ROM hacks
 
-Point Romcade at an IPS, UPS or BPS patch and it patches a *copy* of a ROM in
+Point Playdex at an IPS, UPS or BPS patch and it patches a *copy* of a ROM in
 your library. The original is never modified. The result is added as its own
 game with its own title, art, saves and playtime.
 
-UPS and BPS embed the CRC32 of the ROM they were built against, and Romcade
+UPS and BPS embed the CRC32 of the ROM they were built against, and Playdex
 already hashes everything during scanning, so a mismatch is caught before
 patching rather than producing a corrupt game:
 
@@ -264,7 +264,7 @@ unpacked file out of the cache into the folder the archive lived in, repoints
 the library entry, and then deletes the archive. That order is the design — the
 replacement is in place and checked before anything is removed, and moving it
 out of the cache puts it beyond the reach of eviction, which would otherwise be
-free to delete the only remaining copy. It is the one thing in Romcade that
+free to delete the only remaining copy. It is the one thing in Playdex that
 deletes a file of yours, and it only happens when asked for directly.
 
 ### Cheats
@@ -282,16 +282,16 @@ prepping a ROM you plan to start from RetroArch directly.
 ### Saves
 
 Save files and save states are listed together, with RetroArch's state
-thumbnails where it wrote them. Romcade looks in the configured save
+thumbnails where it wrote them. Playdex looks in the configured save
 directories, the per-core subfolders RetroArch creates when sorting is on, and
 the ROM's own folder. Back up copies everything into a dated folder. Only save
 states can be deleted; battery saves hold real progress and are refused.
 
 ### Skins
 
-Seven layouts, under **Settings → Appearance**:
+Six layouts, under **Settings → Appearance**:
 
-- **Romcade**: the desktop view. Sidebar, sortable grid, detail panel.
+- **Playdex**: the desktop view. Sidebar, sortable grid, detail panel.
 - **Console**: a home screen. One row of large icons sized against the window,
   a caption underneath, and a row of small round system buttons that each go
   somewhere different, including an "All software" grid.
@@ -299,14 +299,13 @@ Seven layouts, under **Settings → Appearance**:
 - **Arc**: one column of slabs down the middle of a dark screen, lit from one
   side. The selected slab steps toward the light rather than only changing
   colour, which is what stops the column reading as a list of links.
-- **Blades**: panels standing side by side, one open and the rest turned
-  edge-on as coloured spines. The only light skin in the set. It claims Back,
-  so Back closes the open blade before the app closes anything.
-- **Showcase**: a strip of tiles along the top and one game spread out
-  underneath. It differs from **Console** in where the weight sits — there the
-  row *is* the screen, here it is trim and the space below is the point.
 - **Browser**: a column of cards standing in a slow-drifting field. Thin
   letter-spaced type and a lot of space doing nothing, on purpose.
+- **Channels**: the one light layout. A fixed 4x3 page of framed channels you
+  move between with arrows rather than scrolling, a soft blue glow on the one
+  you are on, and a silver tray along the bottom with the clock in the middle.
+  A half-full page draws the empty sockets rather than simply ending early,
+  which is the detail that makes the shape read.
 
 They're separate component trees, not a palette swap, since a console home
 screen is a different shape rather than a different colour. All state and
@@ -359,7 +358,7 @@ game.
 
 ### Updates
 
-Romcade checks for a new version a few seconds after launch, once the library
+Playdex checks for a new version a few seconds after launch, once the library
 has drawn, so a slow or unreachable endpoint never delays startup. If it finds
 one it says so in a corner card with the release notes. Nothing downloads until
 you accept.
@@ -456,12 +455,9 @@ that's a 404 and every check fails silently.
 `tauri signer generate` produced a keypair. The public half is in
 `tauri.conf.json`. The private half lives outside this repository at
 `~/.playdex/updater.key`, in a folder that ignores itself so a stray
-`git add -A` can't pick it up. That path keeps the old name deliberately: it
-is a real file on disk from before the rename, and every installed copy of
-Playdex and Romcade alike only accepts updates signed by it, so moving it
-buys nothing and losing it cannot be undone.
+`git add -A` can't pick it up.
 
-- **Anyone holding the private key can sign an update Romcade will trust and
+- **Anyone holding the private key can sign an update Playdex will trust and
   install.** Keep it in a password manager and in GitHub repository secrets,
   nowhere else.
 - **Losing it can't be undone.** Installed copies only accept updates signed by
@@ -547,6 +543,6 @@ you.
 
 MIT. See [LICENSE](LICENSE).
 
-Romcade bundles no games, no BIOS files and no DAT catalogues. Artwork and
+Playdex bundles no games, no BIOS files and no DAT catalogues. Artwork and
 descriptions are fetched at runtime from third-party metadata providers and
 belong to their respective owners.

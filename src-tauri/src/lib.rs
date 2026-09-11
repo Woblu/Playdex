@@ -93,37 +93,63 @@ fn app_paths(state: State<AppState>) -> serde_json::Value {
     })
 }
 
-/// The bundle identifier Playdex shipped under, up to and including 0.8.1.
+/// Bundle identifiers this app has shipped under before, newest first.
 ///
-/// The app data directory is derived from the identifier, so renaming the app
-/// to Romcade moves it. Everything anyone has — the library database, their
-/// playtime, the artwork cache and the generated disc playlists — lives in
-/// that folder, so the first launch after updating carries it across instead
-/// of opening an empty library.
-const LEGACY_IDENTIFIER: &str = "com.boazv.playdex";
+/// The app data directory is named after the identifier, so every rename
+/// moves it, and everything anyone has — the library database, their playtime,
+/// the artwork cache, imported patches and the generated disc playlists —
+/// lives in that folder. A launch after a rename has to go and find it.
+///
+/// `com.boazv.playdex` is the current one again, so it does not appear here:
+/// 0.9.0 renamed the app to Romcade and 0.11.0 renamed it back, which means a
+/// library can be sitting under either name depending on which versions a
+/// person happened to run. Add to this list on the next rename rather than
+/// replacing it, because the old directories do not disappear.
+const LEGACY_IDENTIFIERS: &[&str] = &["com.boazv.romcade"];
 
-/// Moves `old` to `new` if, and only if, there is something to move and
-/// nothing already at the destination.
+/// Whether a directory actually holds a library, as opposed to merely
+/// existing.
 ///
-/// Refusing to run when `new` exists is the whole safety argument: a Romcade
-/// library that is already in place can never be overwritten by a stale
-/// Playdex one, whatever order things happened in. Returns whether it moved
-/// anything.
+/// This distinction is the whole point. An empty data directory gets created
+/// by any build that starts even once, so "the destination exists" says
+/// nothing about whether there is anything in it.
+fn has_library(dir: &std::path::Path) -> bool {
+    dir.join("library.db").is_file()
+}
+
+/// Moves the *contents* of `old` into `new`, if and only if `old` holds a
+/// library and `new` does not.
+///
+/// Contents rather than the directory itself, and keyed on the library file
+/// rather than on the directory existing, because of how this actually fails:
+/// run an older build once after updating and it recreates its own empty data
+/// directory. A version of this that renamed the folder and refused whenever
+/// the destination existed would then find that empty directory in the way,
+/// decline, and quietly leave the real library stranded under the old name —
+/// which is the exact failure it was written to prevent.
+///
+/// Nothing is ever overwritten: an entry already present at the destination is
+/// left alone and the old copy stays where it is.
 ///
 /// Split out from the identifier lookup so it can be tested without standing
 /// up a Tauri app handle.
-fn move_data_dir(old: &std::path::Path, new: &std::path::Path) -> std::io::Result<bool> {
-    if new.exists() || !old.is_dir() {
+fn adopt_data_dir(old: &std::path::Path, new: &std::path::Path) -> std::io::Result<bool> {
+    if !has_library(old) || has_library(new) {
         return Ok(false);
     }
-    if let Some(parent) = new.parent() {
-        std::fs::create_dir_all(parent)?;
+    std::fs::create_dir_all(new)?;
+    for entry in std::fs::read_dir(old)? {
+        let entry = entry?;
+        let dest = new.join(entry.file_name());
+        if dest.exists() {
+            continue;
+        }
+        std::fs::rename(entry.path(), &dest)?;
     }
-    std::fs::rename(old, new)?;
     Ok(true)
 }
 
-/// Carries a pre-rename library across, if one is sitting next door.
+/// Carries a library across from whichever name it was last saved under.
 ///
 /// A failure here is reported and then dropped. Being unable to move the old
 /// folder is a bad first launch; refusing to start at all is a worse one, and
@@ -133,15 +159,20 @@ fn migrate_legacy_data_dir(new_dir: &std::path::Path) {
     let Some(parent) = new_dir.parent() else {
         return;
     };
-    let old_dir = parent.join(LEGACY_IDENTIFIER);
-    match move_data_dir(&old_dir, new_dir) {
-        Ok(true) => eprintln!(
-            "carried the library over from {} to {}",
-            old_dir.display(),
-            new_dir.display()
-        ),
-        Ok(false) => {}
-        Err(e) => eprintln!("could not carry the old Playdex library across: {e}"),
+    for legacy in LEGACY_IDENTIFIERS {
+        let old_dir = parent.join(legacy);
+        if old_dir == new_dir {
+            continue;
+        }
+        match adopt_data_dir(&old_dir, new_dir) {
+            Ok(true) => eprintln!(
+                "carried the library over from {} to {}",
+                old_dir.display(),
+                new_dir.display()
+            ),
+            Ok(false) => {}
+            Err(e) => eprintln!("could not carry the library across from {legacy}: {e}"),
+        }
     }
 }
 
@@ -174,10 +205,12 @@ pub fn run() {
             // broken. This runs for anyone who took 0.9.0 before the paths
             // were fixed, not only at the moment the folder moves.
             if let Some(current) = data_dir.file_name().and_then(|name| name.to_str()) {
-                match db::repoint_data_dir(&conn, LEGACY_IDENTIFIER, current) {
-                    Ok(0) => {}
-                    Ok(n) => eprintln!("repointed {n} stored paths after the rename"),
-                    Err(e) => eprintln!("could not repoint stored paths: {e}"),
+                for legacy in LEGACY_IDENTIFIERS {
+                    match db::repoint_data_dir(&conn, legacy, current) {
+                        Ok(0) => {}
+                        Ok(n) => eprintln!("repointed {n} stored paths from {legacy}"),
+                        Err(e) => eprintln!("could not repoint stored paths: {e}"),
+                    }
                 }
             }
 
@@ -187,7 +220,7 @@ pub fn run() {
             std::fs::create_dir_all(media_root.join("media"))?;
 
             let client = reqwest::Client::builder()
-                .user_agent(concat!("romcade/", env!("CARGO_PKG_VERSION")))
+                .user_agent(concat!("playdex/", env!("CARGO_PKG_VERSION")))
                 .timeout(std::time::Duration::from_secs(30))
                 .build()
                 .expect("could not build http client");
@@ -269,14 +302,13 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-
 #[cfg(test)]
 mod migration_tests {
-    use super::move_data_dir;
+    use super::adopt_data_dir;
 
     fn scratch(name: &str) -> std::path::PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "romcade-migrate-{}-{}",
+            "playdex-migrate-{}-{}",
             name,
             std::process::id()
         ));
@@ -284,34 +316,55 @@ mod migration_tests {
         dir
     }
 
-    #[test]
-    fn carries_an_old_library_across() {
-        let base = scratch("move");
-        let old = base.join("com.boazv.playdex");
-        let new = base.join("com.boazv.romcade");
-        std::fs::create_dir_all(&old).unwrap();
-        std::fs::write(old.join("library.db"), b"library").unwrap();
+    fn library_at(dir: &std::path::Path, marker: &[u8]) {
+        std::fs::create_dir_all(dir).unwrap();
+        std::fs::write(dir.join("library.db"), marker).unwrap();
+        std::fs::create_dir_all(dir.join("media")).unwrap();
+        std::fs::write(dir.join("media").join("cover.jpg"), b"art").unwrap();
+    }
 
-        assert!(move_data_dir(&old, &new).unwrap());
+    #[test]
+    fn carries_a_library_across() {
+        let base = scratch("move");
+        let old = base.join("com.boazv.romcade");
+        let new = base.join("com.boazv.playdex");
+        library_at(&old, b"library");
+
+        assert!(adopt_data_dir(&old, &new).unwrap());
         assert_eq!(std::fs::read(new.join("library.db")).unwrap(), b"library");
-        assert!(!old.exists());
+        assert!(new.join("media").join("cover.jpg").exists());
+
+        std::fs::remove_dir_all(&base).ok();
+    }
+
+    /// The one that matters. Running an older build even once recreates its
+    /// own empty data directory, and a migration keyed on "does the
+    /// destination exist" would decline here and strand the real library.
+    #[test]
+    fn adopts_into_a_destination_that_exists_but_is_empty() {
+        let base = scratch("empty-dest");
+        let old = base.join("com.boazv.romcade");
+        let new = base.join("com.boazv.playdex");
+        library_at(&old, b"library");
+        std::fs::create_dir_all(&new).unwrap();
+
+        assert!(adopt_data_dir(&old, &new).unwrap());
+        assert_eq!(std::fs::read(new.join("library.db")).unwrap(), b"library");
 
         std::fs::remove_dir_all(&base).ok();
     }
 
     #[test]
-    fn refuses_to_overwrite_an_existing_library() {
+    fn refuses_to_overwrite_a_real_library() {
         let base = scratch("keep");
-        let old = base.join("com.boazv.playdex");
-        let new = base.join("com.boazv.romcade");
-        std::fs::create_dir_all(&old).unwrap();
-        std::fs::write(old.join("library.db"), b"old").unwrap();
-        std::fs::create_dir_all(&new).unwrap();
-        std::fs::write(new.join("library.db"), b"new").unwrap();
+        let old = base.join("com.boazv.romcade");
+        let new = base.join("com.boazv.playdex");
+        library_at(&old, b"old");
+        library_at(&new, b"new");
 
-        assert!(!move_data_dir(&old, &new).unwrap());
+        assert!(!adopt_data_dir(&old, &new).unwrap());
         assert_eq!(std::fs::read(new.join("library.db")).unwrap(), b"new");
-        assert!(old.exists());
+        assert!(old.join("library.db").exists());
 
         std::fs::remove_dir_all(&base).ok();
     }
@@ -319,8 +372,23 @@ mod migration_tests {
     #[test]
     fn does_nothing_on_a_fresh_install() {
         let base = scratch("fresh");
-        let new = base.join("com.boazv.romcade");
-        assert!(!move_data_dir(&base.join("com.boazv.playdex"), &new).unwrap());
+        let new = base.join("com.boazv.playdex");
+        assert!(!adopt_data_dir(&base.join("com.boazv.romcade"), &new).unwrap());
         assert!(!new.exists());
+    }
+
+    /// An empty directory under the old name is not a library, so it must not
+    /// count as something to carry across.
+    #[test]
+    fn ignores_an_empty_legacy_directory() {
+        let base = scratch("empty-src");
+        let old = base.join("com.boazv.romcade");
+        let new = base.join("com.boazv.playdex");
+        std::fs::create_dir_all(&old).unwrap();
+
+        assert!(!adopt_data_dir(&old, &new).unwrap());
+        assert!(!new.exists());
+
+        std::fs::remove_dir_all(&base).ok();
     }
 }

@@ -16,14 +16,13 @@ export type SkinName =
   | "switch"
   | "steam"
   | "arc"
-  | "blades"
-  | "showcase"
-  | "browser";
+  | "browser"
+  | "wii";
 
 export const SKINS: Array<{ value: SkinName; label: string; blurb: string }> = [
   {
     value: "launchbox",
-    label: "Romcade",
+    label: "Playdex",
     blurb: "A dense desktop library: sidebar, sortable grid, detail panel.",
   },
   {
@@ -44,16 +43,10 @@ export const SKINS: Array<{ value: SkinName; label: string; blurb: string }> = [
       "One column of slabs down the middle of a dark screen, lit from one side.",
   },
   {
-    value: "blades",
-    label: "Blades",
+    value: "wii",
+    label: "Channels",
     blurb:
-      "Panels side by side, one open and the rest turned edge-on. The light one.",
-  },
-  {
-    value: "showcase",
-    label: "Showcase",
-    blurb:
-      "A strip of tiles along the top, and whatever is selected spread out below.",
+      "A bright 4x3 grid of channels you page through, with a silver tray along the bottom.",
   },
   {
     value: "browser",

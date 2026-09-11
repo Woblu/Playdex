@@ -108,7 +108,7 @@ body.skin-switch {
 
 /* No circle. A pixel-art mark shrunk inside a grey bubble reads as a sticker
    stuck on the screen, and there is no profile here for a bubble to stand for
-   anyway - Romcade has no accounts. */
+   anyway - Playdex has no accounts. */
 .sw-profile {
   display: flex;
   align-items: center;
@@ -171,7 +171,10 @@ body.skin-switch {
   gap: clamp(12px, 1.6vw, 26px);
   align-items: center;
   overflow-x: auto;
-  padding: 30px 34px;
+  /* A scroller clips both axes, so the room a focused tile needs for its
+     ring, its lift and its shadow has to be padding inside it. Without
+     this the top row of anything gets its glow sliced off. */
+  padding: 46px 34px 50px;
   scrollbar-width: none;
   /* A backstop: anything that moves this row eases, whoever asked. */
   scroll-behavior: smooth;
@@ -513,7 +516,10 @@ body.skin-steam {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(184px, 1fr));
   gap: 16px;
-  padding: 24px 42px;
+  /* A scroller clips both axes, so the room a focused tile needs for its
+     ring, its lift and its shadow has to be padding inside it. Without
+     this the top row of anything gets its glow sliced off. */
+  padding: 34px 42px 44px;
   align-content: start;
 }
 
@@ -832,7 +838,7 @@ body.skin-steam {
 }
 
 /* The offer to collapse an archived game down to one copy. Set apart from
-   the plain file path above it, since it is the one control in Romcade that
+   the plain file path above it, since it is the one control in Playdex that
    deletes something of yours. */
 .unpack-box {
   margin-top: 10px;
@@ -948,6 +954,7 @@ body.skin-arc {
   scrollbar-width: none;
   flex: 1;
   min-width: 0;
+  padding: 5px 2px;
 }
 .arc-systems::-webkit-scrollbar { display: none; }
 .arc-chip {
@@ -999,7 +1006,10 @@ body.skin-arc {
   display: flex;
   flex-direction: column;
   gap: 7px;
-  padding: 6px 4px 6px 0;
+  /* A scroller clips both axes, so the room a focused tile needs for its
+     ring, its lift and its shadow has to be padding inside it. Without
+     this the top row of anything gets its glow sliced off. */
+  padding: 10px 16px 10px 4px;
 }
 .arc-column::-webkit-scrollbar { display: none; }
 
@@ -1101,411 +1111,6 @@ body.skin-arc {
 }
 .arc-hints b { color: var(--arc-green); margin-right: 5px; }
 
-/* --------------------------------------------------------------- blades ---
-   Panels standing side by side. The ones you are not in stay on screen turned
-   edge-on, so moving between them reads as sliding a stack apart rather than
-   going to another page. Deliberately lighter than the other console skins:
-   this era of dashboard was silver, not black. */
-
-body.skin-blades {
-  --bl-bg: #dfe4e2;
-  --bl-ink: #23282b;
-  --bl-dim: #5c666b;
-  --bl-green: #5ba524;
-  --bl-blue: #2f7fb5;
-  --bl-orange: #d0761c;
-  --bl-grey: #7c878c;
-}
-
-.bl-shell {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--bl-bg);
-  color: var(--bl-ink);
-  isolation: isolate;
-  overflow: hidden;
-}
-.bl-sky {
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  background:
-    radial-gradient(70% 60% at 50% 0%, #ffffff, transparent 70%),
-    linear-gradient(180deg, #eef2f1 0%, #c9d2cf 100%);
-}
-
-.bl-top {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 26px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.10);
-}
-.bl-brand {
-  font-size: 14px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-  color: var(--bl-green);
-}
-.bl-search {
-  margin-left: auto;
-  width: 220px;
-  padding: 8px 13px;
-  border-radius: 4px;
-  border: 1px solid rgba(0, 0, 0, 0.18);
-  background: rgba(255, 255, 255, 0.75);
-  color: var(--bl-ink);
-  font-size: 13px;
-}
-.bl-count { font-size: 12px; color: var(--bl-dim); }
-.bl-error { margin: 10px 26px 0; }
-
-.bl-blades {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  gap: 6px;
-  padding: 14px 26px 20px;
-}
-
-.bl-blade {
-  display: flex;
-  flex-direction: column;
-  min-width: 0;
-  border-radius: 3px;
-  transition: flex-grow 0.2s ease;
-}
-.bl-blade.open {
-  flex: 1;
-  min-width: 0;
-  background: rgba(255, 255, 255, 0.72);
-  border: 1px solid rgba(0, 0, 0, 0.12);
-  box-shadow: 0 10px 30px -18px rgba(0, 0, 0, 0.55);
-}
-.bl-blade.shut { flex: none; width: 52px; }
-
-/* Each blade keeps its own colour whether it is open or edge-on, so the
-   stack stays legible as a stack. */
-.bl-games  { --bl-c: var(--bl-green); }
-.bl-systems { --bl-c: var(--bl-blue); }
-.bl-game   { --bl-c: var(--bl-orange); }
-.bl-more   { --bl-c: var(--bl-grey); }
-
-.bl-blade.open { border-top: 3px solid var(--bl-c); }
-
-.bl-spine {
-  flex: 1;
-  width: 100%;
-  border-radius: 3px;
-  background: var(--bl-c);
-  color: #fff;
-  display: grid;
-  place-items: center;
-  transition: filter 0.15s, width 0.15s;
-}
-.bl-spine:hover, .bl-spine:focus-visible { filter: brightness(1.12); }
-.bl-spine-label {
-  writing-mode: vertical-rl;
-  transform: rotate(180deg);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.bl-head {
-  flex: none;
-  margin: 0;
-  padding: 14px 18px 10px;
-  font-size: 17px;
-  letter-spacing: 0.02em;
-}
-.bl-content { flex: 1; min-height: 0; overflow-y: auto; padding: 0 18px 18px; }
-
-.bl-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(108px, 1fr));
-  gap: 12px;
-}
-.bl-tile {
-  aspect-ratio: 3 / 4;
-  border-radius: 3px;
-  overflow: hidden;
-  position: relative;
-  background: rgba(0, 0, 0, 0.10);
-  border: 2px solid transparent;
-  transition: transform 0.13s, border-color 0.13s;
-}
-.bl-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bl-tile.on, .bl-tile:focus-visible {
-  border-color: var(--bl-c);
-  transform: translateY(-3px);
-}
-.bl-tile-fallback {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px;
-  font-size: 11px;
-  line-height: 1.3;
-  color: var(--bl-dim);
-  text-align: center;
-}
-.bl-star { position: absolute; top: 5px; right: 6px; color: var(--bl-orange); }
-
-.bl-list { display: flex; flex-direction: column; gap: 4px; }
-.bl-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 11px 13px;
-  border-radius: 3px;
-  text-align: left;
-  font-size: 14px;
-  color: var(--bl-ink);
-  background: rgba(0, 0, 0, 0.04);
-}
-.bl-row:hover { background: rgba(0, 0, 0, 0.09); }
-.bl-row.on {
-  background: var(--bl-c);
-  color: #fff;
-  font-weight: 600;
-}
-.bl-row-count { margin-left: auto; font-size: 12px; opacity: 0.75; }
-
-.bl-selected { display: flex; flex-direction: column; gap: 8px; }
-.bl-selected-art {
-  width: 160px;
-  aspect-ratio: 3 / 4;
-  border-radius: 3px;
-  overflow: hidden;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.10);
-}
-.bl-selected-art img { width: 100%; height: 100%; object-fit: cover; }
-.bl-selected h3 { margin: 6px 0 0; font-size: 18px; }
-.bl-selected-meta { margin: 0; font-size: 13px; color: var(--bl-dim); }
-.bl-selected-desc {
-  margin: 6px 0 0;
-  font-size: 13px;
-  line-height: 1.5;
-  color: var(--bl-dim);
-  max-height: 8.5em;
-  overflow: hidden;
-}
-.bl-selected-actions { display: flex; gap: 8px; margin-top: 10px; }
-.bl-play {
-  padding: 11px 22px;
-  border-radius: 3px;
-  font-weight: 700;
-  font-size: 14px;
-  color: #fff;
-  background: var(--bl-green);
-}
-.bl-play:hover { filter: brightness(1.08); }
-.bl-empty { color: var(--bl-dim); font-size: 14px; display: grid; gap: 12px; }
-
-.bl-hints {
-  flex: none;
-  display: flex;
-  gap: 20px;
-  padding: 9px 26px;
-  font-size: 12px;
-  color: var(--bl-dim);
-  border-top: 1px solid rgba(0, 0, 0, 0.10);
-}
-.bl-hints b { color: var(--bl-green); margin-right: 5px; }
-
-/* ------------------------------------------------------------- showcase ---
-   A strip of tiles along the top and one game spread out underneath. The
-   difference from the handheld skin is where the weight sits: there the row
-   is the middle of the screen, here it is trim and the space below is the
-   point. */
-
-body.skin-showcase {
-  --sc-bg: #0d1016;
-  --sc-text: #f2f5f9;
-  --sc-dim: #9aa6b6;
-  --sc-accent: #4d7cff;
-  --sc-tile: clamp(96px, 13vh, 150px);
-}
-
-.sc-shell {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--sc-bg);
-  color: var(--sc-text);
-  isolation: isolate;
-  overflow: hidden;
-}
-
-.sc-hero { position: absolute; inset: 0; z-index: -1; overflow: hidden; }
-.sc-hero img {
-  width: 100%;
-  height: 62%;
-  object-fit: cover;
-  opacity: 0.5;
-  transform: scale(1.04);
-}
-.sc-hero-fade {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(13, 16, 22, 0.55) 0%,
-    rgba(13, 16, 22, 0.30) 26%,
-    var(--sc-bg) 62%
-  );
-}
-
-.sc-top {
-  flex: none;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 16px 34px;
-}
-.sc-filters {
-  display: flex;
-  gap: 5px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  min-width: 0;
-}
-.sc-filters::-webkit-scrollbar { display: none; }
-.sc-filter {
-  flex: none;
-  padding: 6px 14px;
-  border-radius: 999px;
-  font-size: 13px;
-  color: var(--sc-dim);
-  white-space: nowrap;
-}
-.sc-filter:hover { color: var(--sc-text); }
-.sc-filter.on { color: var(--sc-text); background: rgba(255, 255, 255, 0.14); }
-.sc-top-right { margin-left: auto; display: flex; align-items: center; gap: 7px; }
-.sc-search {
-  width: 170px;
-  padding: 7px 13px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.09);
-  border: 1px solid transparent;
-  color: var(--sc-text);
-  font-size: 13px;
-}
-.sc-icon-btn {
-  padding: 7px 12px;
-  border-radius: 999px;
-  font-size: 12.5px;
-  color: var(--sc-dim);
-}
-.sc-icon-btn:hover { color: var(--sc-text); background: rgba(255, 255, 255, 0.09); }
-.sc-error { margin: 0 34px; }
-
-.sc-row {
-  flex: none;
-  display: flex;
-  gap: 14px;
-  align-items: flex-end;
-  padding: 10px 34px 6px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  min-height: calc(var(--sc-tile) * 1.22);
-}
-.sc-row::-webkit-scrollbar { display: none; }
-
-/* The selected tile grows away from its neighbours rather than merely
-   gaining a ring. On a row this shallow that is the only change big enough
-   to read from a sofa. */
-.sc-tile {
-  flex: none;
-  width: var(--sc-tile);
-  height: var(--sc-tile);
-  border-radius: 12px;
-  overflow: hidden;
-  position: relative;
-  background: rgba(255, 255, 255, 0.07);
-  transition: transform 0.16s ease, box-shadow 0.16s;
-  transform-origin: bottom center;
-}
-.sc-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.sc-tile.on, .sc-tile:focus-visible {
-  transform: scale(1.18);
-  box-shadow: 0 14px 34px -12px rgba(0, 0, 0, 0.9);
-}
-.sc-tile-fallback {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 8px;
-  font-size: 10.5px;
-  line-height: 1.3;
-  color: var(--sc-dim);
-  text-align: center;
-}
-.sc-star { position: absolute; top: 6px; right: 7px; color: #ffd24a; font-size: 12px; }
-.sc-nothing { color: var(--sc-dim); padding: 30px 0; }
-
-.sc-detail { flex: 1; min-height: 0; padding: 22px 34px 0; overflow-y: auto; }
-.sc-title { font-size: clamp(26px, 3.6vw, 44px); margin: 0 0 10px; letter-spacing: -0.02em; }
-.sc-meta { color: var(--sc-dim); font-size: 14px; margin: 0 0 4px; }
-.sc-played { color: var(--sc-dim); font-size: 13px; margin: 0 0 16px; }
-.sc-desc {
-  color: var(--sc-dim);
-  font-size: 14px;
-  line-height: 1.6;
-  margin: 0 0 20px;
-  max-width: 62ch;
-}
-.sc-actions { display: flex; gap: 10px; }
-.sc-play {
-  padding: 13px 34px;
-  border-radius: 999px;
-  font-weight: 700;
-  font-size: 15px;
-  color: #0b1020;
-  background: #fff;
-}
-.sc-play:hover { background: #e6ecff; }
-.sc-secondary {
-  padding: 13px 24px;
-  border-radius: 999px;
-  font-size: 15px;
-  color: var(--sc-text);
-  background: rgba(255, 255, 255, 0.12);
-}
-.sc-secondary:hover { background: rgba(255, 255, 255, 0.2); }
-.sc-empty { flex: 1; display: grid; place-content: center; text-align: center; gap: 10px; }
-.sc-empty h1 { margin: 0; font-size: 28px; }
-.sc-empty p { margin: 0; color: var(--sc-dim); }
-
-.sc-hints {
-  flex: none;
-  display: flex;
-  gap: 20px;
-  padding: 11px 34px;
-  font-size: 12px;
-  color: var(--sc-dim);
-}
-.sc-hints b { color: var(--sc-text); margin-right: 5px; }
-
 /* -------------------------------------------------------------- browser ---
    A column of cards standing in a slow field. The field is the character of
    the thing; the restraint in front of it is the rest. Thin letter-spaced
@@ -1569,6 +1174,7 @@ body.skin-browser {
   scrollbar-width: none;
   min-width: 0;
   flex: 1;
+  padding: 5px 2px;
 }
 .br-filters::-webkit-scrollbar { display: none; }
 .br-filter {
@@ -1613,6 +1219,10 @@ body.skin-browser {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  /* A scroller clips both axes, so the room a focused tile needs for its
+     ring, its lift and its shadow has to be padding inside it. Without
+     this the top row of anything gets its glow sliced off. */
+  padding: 8px 12px 8px 4px;
 }
 .br-column::-webkit-scrollbar { display: none; }
 
@@ -1728,4 +1338,409 @@ body.skin-browser {
   .bl-tile,
   .sc-tile,
   .br-card { transition: none; }
+}
+
+/* ------------------------------------------------------------------ wii ---
+   A channel grid. The one light skin, and the one that never scrolls: a fixed
+   4x3 page with arrows either side, so a channel stays where you left it.
+
+   Because it pages instead of scrolling, nothing here needs `overflow` on the
+   grid, which is what lets the selection glow bleed past a tile in the top row
+   instead of being sliced off by a scroll container. */
+
+body.skin-wii {
+  --wii-bg: #eff3f5;
+  --wii-bg-2: #c6d0d7;
+  --wii-face: #ffffff;
+  --wii-edge: #b6bfc5;
+  --wii-edge-soft: #d7dee2;
+  --wii-ink: #3a4146;
+  --wii-dim: #77838a;
+  --wii-blue: #00a8e0;
+  --wii-blue-soft: rgba(0, 168, 224, 0.55);
+  --wii-tray: #dfe4e7;
+  /* One row's height. Everything else is derived from it, so the 4x3 page
+     holds its shape at any window size rather than reflowing into a wall. */
+  --wii-row: clamp(78px, 20.5vh, 180px);
+  --wii-gap: clamp(12px, 1.6vw, 22px);
+}
+
+.wii-shell {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--wii-bg) 0%, var(--wii-bg-2) 100%);
+  color: var(--wii-ink);
+  isolation: isolate;
+  overflow: hidden;
+  /* Rounder and friendlier than the rest of the app, which is half of why
+     the screen reads as a different machine. */
+  font-family: "Trebuchet MS", ui-rounded, "Segoe UI", system-ui, sans-serif;
+}
+
+/* A soft bloom in the middle and a little shade at the corners, so the white
+   is a lit room rather than a flat fill. */
+.wii-room {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    radial-gradient(58% 46% at 50% 34%, rgba(255, 255, 255, 0.95), transparent 70%),
+    radial-gradient(120% 90% at 50% 120%, rgba(120, 140, 150, 0.22), transparent 60%);
+}
+
+/* ---- the quiet part: filters and search, kept out of the way */
+.wii-top {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 13px 26px 4px;
+}
+.wii-pills {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  min-width: 0;
+  flex: 1;
+  /* Room for the focus ring on a pill, which would otherwise be shaved off
+     by this scroller the same way the channel glow used to be. */
+  padding: 5px 2px;
+}
+.wii-pills::-webkit-scrollbar { display: none; }
+.wii-pill {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  color: var(--wii-dim);
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--wii-edge-soft);
+  white-space: nowrap;
+  transition: color 0.14s, border-color 0.14s, background 0.14s;
+}
+.wii-pill:hover { color: var(--wii-ink); border-color: var(--wii-edge); }
+.wii-pill.on {
+  color: #10556c;
+  background: #bfe6f4;
+  border-color: #8dd0e8;
+  font-weight: 600;
+}
+.wii-search {
+  flex: none;
+  width: 180px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.9);
+  border: 1px solid var(--wii-edge-soft);
+  color: var(--wii-ink);
+  font-size: 13px;
+  font-family: inherit;
+}
+.wii-error { margin: 6px 26px 0; }
+
+/* ---- the stage: arrows either side of a page of channels */
+.wii-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(10px, 2vw, 30px);
+  /* The glow on a top-row channel reaches about 30px past the tile. This is
+     the room it needs; the shell clips, and nothing else here does. */
+  padding: 26px clamp(12px, 2vw, 34px) 20px;
+}
+
+.wii-arrow {
+  flex: none;
+  width: clamp(40px, 4vw, 58px);
+  height: clamp(40px, 4vw, 58px);
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #6d777d;
+  background: linear-gradient(180deg, #ffffff, #dfe5e8);
+  border: 1px solid var(--wii-edge);
+  box-shadow: 0 2px 4px rgba(60, 72, 80, 0.18);
+  transition: transform 0.12s, box-shadow 0.12s, color 0.12s;
+}
+.wii-arrow:hover:not(:disabled) {
+  color: var(--wii-blue);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(0, 168, 224, 0.3);
+}
+.wii-arrow:active:not(:disabled) { transform: translateY(1px); }
+.wii-arrow:disabled { opacity: 0.3; box-shadow: none; }
+
+.wii-grid-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+/* Columns are sized from the row height rather than the container, so the
+   page is always four across and three down — never five of something
+   smaller, which is what a responsive grid would do here and what would stop
+   it reading as this menu at all. */
+.wii-grid {
+  display: grid;
+  grid-template-columns: repeat(4, calc(var(--wii-row) * 4 / 3));
+  grid-auto-rows: var(--wii-row);
+  gap: var(--wii-gap);
+  justify-content: center;
+}
+
+/* ---- a channel */
+.wii-channel {
+  position: relative;
+  padding: 0;
+  border: 0;
+  /* The frame is the tell. A banner that runs to the edge reads as a card;
+     set into a white surround with rounded corners it reads as a channel. */
+  border-radius: 15px;
+  background: var(--wii-face);
+  box-shadow:
+    0 0 0 1px var(--wii-edge),
+    0 2px 5px rgba(60, 72, 80, 0.16);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.wii-channel.on,
+.wii-channel:focus-visible,
+.wii-channel:hover {
+  /* White rim, then the blue, then the bloom. Three rings rather than a
+     border: the glow has to sit outside the tile and fade, which a border
+     cannot do. */
+  box-shadow:
+    0 0 0 3px #ffffff,
+    0 0 0 6px var(--wii-blue),
+    0 0 30px 9px var(--wii-blue-soft),
+    0 12px 26px rgba(40, 70, 85, 0.26);
+  transform: translateY(-4px) scale(1.03);
+  outline: none;
+  z-index: 2;
+}
+
+.wii-face {
+  position: absolute;
+  inset: 6px;
+  border-radius: 9px;
+  overflow: hidden;
+  display: block;
+  background: #f4f6f7;
+}
+.wii-face img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.wii-fallback {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: var(--wii-dim);
+}
+
+/* A moulded plastic face rather than a flat card: bright across the top,
+   nothing across the bottom. */
+.wii-gloss {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.42) 0%,
+    rgba(255, 255, 255, 0.12) 38%,
+    rgba(255, 255, 255, 0) 58%
+  );
+  pointer-events: none;
+}
+
+.wii-name {
+  position: absolute;
+  left: 6px;
+  right: 6px;
+  bottom: 6px;
+  padding: 4px 7px 5px;
+  font-size: 11px;
+  line-height: 1.25;
+  color: var(--wii-ink);
+  background: rgba(255, 255, 255, 0.9);
+  border-radius: 0 0 9px 9px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+
+.wii-fav {
+  position: absolute;
+  top: 10px;
+  right: 12px;
+  font-size: 12px;
+  color: #ffb400;
+  text-shadow: 0 0 3px rgba(255, 255, 255, 0.9);
+}
+
+/* The sockets. A half-full page showing where the rest would go is the
+   strongest single cue in this whole layout, and a plain grid throws it
+   away by simply ending early. */
+/* An empty socket is a solid recess, never a dashed outline: on the hardware
+   these read as moulded sockets waiting to be filled, and a dashed box reads
+   as a drop target. */
+.wii-channel.empty {
+  background: rgba(255, 255, 255, 0.30);
+  box-shadow:
+    inset 0 2px 4px rgba(70, 85, 95, 0.16),
+    inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+    0 0 0 1px var(--wii-edge-soft);
+  transform: none;
+}
+.wii-socket {
+  position: absolute;
+  inset: 26%;
+  border-radius: 7px;
+  background: rgba(120, 140, 150, 0.07);
+}
+
+.wii-pager { display: flex; gap: 7px; align-items: center; height: 10px; }
+.wii-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(90, 105, 115, 0.26);
+}
+.wii-dot.on { background: var(--wii-blue); }
+
+.wii-empty { text-align: center; color: var(--wii-dim); display: grid; gap: 10px; }
+.wii-empty h1 { color: var(--wii-ink); font-size: 24px; margin: 0; }
+.wii-empty p { margin: 0; }
+.wii-cta {
+  justify-self: center;
+  padding: 11px 22px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  background: var(--wii-blue);
+  border: 1px solid #0090c2;
+}
+
+/* ---- the tray along the bottom */
+.wii-tray {
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 10px clamp(14px, 2vw, 28px);
+  min-height: 68px;
+  background: linear-gradient(180deg, #f7f9fa 0%, var(--wii-tray) 46%, #c4ccd1 100%);
+  border-top: 1px solid #a9b2b8;
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -2px 10px rgba(60, 75, 85, 0.13);
+}
+
+.wii-tray-side {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.wii-tray-side.right { justify-content: flex-end; }
+
+.wii-orb {
+  flex: none;
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-family: inherit;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--wii-dim);
+  background: linear-gradient(180deg, #ffffff, #e3e8eb);
+  border: 1px solid var(--wii-edge);
+  box-shadow: 0 2px 4px rgba(60, 72, 80, 0.2);
+  transition: color 0.14s, box-shadow 0.14s, transform 0.12s;
+}
+.wii-orb:hover {
+  color: var(--wii-blue);
+  box-shadow: 0 0 0 3px rgba(0, 168, 224, 0.28), 0 2px 6px rgba(60, 72, 80, 0.22);
+}
+.wii-orb:active { transform: translateY(1px); }
+
+.wii-slot {
+  flex: none;
+  padding: 9px 15px;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  color: var(--wii-dim);
+  background: linear-gradient(180deg, #ffffff, #e3e8eb);
+  border: 1px solid var(--wii-edge);
+  box-shadow: 0 1px 3px rgba(60, 72, 80, 0.18);
+  transition: color 0.14s, box-shadow 0.14s;
+}
+.wii-slot:hover { color: var(--wii-blue); box-shadow: 0 0 0 3px rgba(0, 168, 224, 0.24); }
+
+.wii-clock {
+  flex: none;
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  padding: 5px 16px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.6);
+  border: 1px solid var(--wii-edge-soft);
+}
+.wii-time { font-size: 21px; font-weight: 600; letter-spacing: 0.01em; }
+.wii-date { font-size: 12px; color: var(--wii-dim); }
+
+.wii-now {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+  text-align: right;
+}
+.wii-now-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.wii-now-sub { font-size: 11.5px; color: var(--wii-dim); }
+
+.wii-hints {
+  flex: none;
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  padding: 0 26px 10px;
+  font-size: 11.5px;
+  color: var(--wii-dim);
+  background: transparent;
+}
+.wii-hints b { color: var(--wii-blue); margin-right: 5px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .wii-channel,
+  .wii-arrow,
+  .wii-orb,
+  .wii-slot { transition: none; }
 }

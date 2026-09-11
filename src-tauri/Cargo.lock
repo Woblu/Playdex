@@ -2998,6 +2998,35 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f6b464fbc74e149a392436b17d523f769e057cb6877f6a5c4618bc6f11800548"
 
 [[package]]
+name = "playdex"
+version = "0.11.0"
+dependencies = [
+ "anyhow",
+ "crc32fast",
+ "futures-util",
+ "hex",
+ "md-5",
+ "quick-xml 0.42.0",
+ "reqwest",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "sevenz-rust2",
+ "sha1",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-opener",
+ "tauri-plugin-process",
+ "tauri-plugin-updater",
+ "thiserror 2.0.20",
+ "tokio",
+ "urlencoding",
+ "walkdir",
+ "zip 8.6.0",
+]
+
+[[package]]
 name = "plist"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3431,35 +3460,6 @@ dependencies = [
  "libc",
  "untrusted",
  "windows-sys 0.52.0",
-]
-
-[[package]]
-name = "romcade"
-version = "0.10.0"
-dependencies = [
- "anyhow",
- "crc32fast",
- "futures-util",
- "hex",
- "md-5",
- "quick-xml 0.42.0",
- "reqwest",
- "rusqlite",
- "serde",
- "serde_json",
- "sevenz-rust2",
- "sha1",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-opener",
- "tauri-plugin-process",
- "tauri-plugin-updater",
- "thiserror 2.0.20",
- "tokio",
- "urlencoding",
- "walkdir",
- "zip 8.6.0",
 ]
 
 [[package]]

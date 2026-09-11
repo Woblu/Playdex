@@ -1068,11 +1068,13 @@ pub fn longest_session(conn: &Connection) -> Result<i64> {
 mod repoint_tests {
     use super::{open, repoint_data_dir};
 
-    const OLD: &str = "com.boazv.playdex";
-    const NEW: &str = "com.boazv.romcade";
+    // The rename went Playdex -> Romcade and then back again, so the direction
+    // under test is from whichever name a library was last saved under.
+    const OLD: &str = "com.boazv.romcade";
+    const NEW: &str = "com.boazv.playdex";
 
     fn library() -> (scratch::Guard, rusqlite::Connection) {
-        let dir = scratch::Guard::new("romcade-repoint");
+        let dir = scratch::Guard::new("playdex-repoint");
         let conn = open(&dir.path().join("library.db")).unwrap();
         (dir, conn)
     }

@@ -258,7 +258,7 @@ pub fn playable_path(game: &Game, cache_root: &Path, accepts: Option<&[String]>)
 /// cache also takes it out of reach of eviction, which would otherwise be
 /// free to delete the only remaining copy of the game.
 ///
-/// This deletes something of yours, which nothing else in Romcade does. It
+/// This deletes something of yours, which nothing else in Playdex does. It
 /// only ever happens when asked for directly.
 pub fn unpack_in_place(
     conn: &rusqlite::Connection,
@@ -596,7 +596,7 @@ mod tests {
 
     fn tmp(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(
-            "romcade-launch-{}-{}-{:?}",
+            "playdex-launch-{}-{}-{:?}",
             tag,
             std::process::id(),
             std::time::SystemTime::now()

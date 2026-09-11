@@ -47,7 +47,7 @@ export default function GameDetail({
   // Windows paths use backslashes, so both separators have to split.
   const fileName = game.path.split(/[\\/]/).pop() ?? game.path;
   // Only archives have a second copy to collapse. `.rar` is excluded because
-  // Romcade cannot open one in the first place.
+  // Playdex cannot open one in the first place.
   const isArchived = /\.(zip|7z)$/i.test(game.path);
   const [command, setCommand] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);

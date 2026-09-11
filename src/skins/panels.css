@@ -310,33 +310,7 @@ body.skin-arc {
 }
 
 /* The one light skin in the set, so the tokens invert rather than shift. */
-body.skin-blades {
-  --bg: #dfe4e2;
-  --surface: #f3f6f5;
-  --surface-2: #e8edec;
-  --surface-3: #dbe2e0;
-  --border: rgba(0, 0, 0, 0.13);
-  --border-strong: rgba(0, 0, 0, 0.26);
-  --text: #23282b;
-  --text-2: #414a4e;
-  --text-3: #5c666b;
-  --accent: #5ba524;
-  --accent-soft: rgba(91, 165, 36, 0.16);
-}
 
-body.skin-showcase {
-  --bg: #0d1016;
-  --surface: #161b24;
-  --surface-2: #1c222d;
-  --surface-3: #242b37;
-  --border: rgba(255, 255, 255, 0.09);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --text: #f2f5f9;
-  --text-2: #c6cfdb;
-  --text-3: #9aa6b6;
-  --accent: #4d7cff;
-  --accent-soft: rgba(77, 124, 255, 0.18);
-}
 
 body.skin-browser {
   --bg: #040a1c;
@@ -355,20 +329,14 @@ body.skin-browser {
 /* Filled buttons: dark text on the two light-on-dark accents, white on the
    one skin whose accent is dark enough to carry it. */
 body.skin-arc .btn.primary { color: #0b1705; }
-body.skin-blades .btn.primary { color: #ffffff; }
-body.skin-showcase .btn.primary { color: #ffffff; }
 body.skin-browser .btn.primary { color: #061028; }
 
 body.skin-arc .modal-body,
-body.skin-blades .modal-body,
-body.skin-showcase .modal-body,
 body.skin-browser .modal-body {
   flex: 1;
 }
 
 body.skin-arc .overlay,
-body.skin-blades .overlay,
-body.skin-showcase .overlay,
 body.skin-browser .overlay {
   padding: 0;
   display: block;
@@ -377,8 +345,6 @@ body.skin-browser .overlay {
 }
 
 body.skin-arc .modal,
-body.skin-blades .modal,
-body.skin-showcase .modal,
 body.skin-browser .modal {
   width: 100%;
   max-width: none;
@@ -392,8 +358,6 @@ body.skin-browser .modal {
 }
 
 body.skin-arc .modal-head,
-body.skin-blades .modal-head,
-body.skin-showcase .modal-head,
 body.skin-browser .modal-head {
   padding: 26px 46px 14px;
   border-bottom: none;
@@ -403,8 +367,6 @@ body.skin-browser .modal-head {
 }
 
 body.skin-arc .tabs,
-body.skin-blades .tabs,
-body.skin-showcase .tabs,
 body.skin-browser .tabs {
   gap: 8px;
   padding: 0 46px 14px;
@@ -412,8 +374,6 @@ body.skin-browser .tabs {
 }
 
 body.skin-arc .tab,
-body.skin-blades .tab,
-body.skin-showcase .tab,
 body.skin-browser .tab {
   padding: 9px 18px;
   border-radius: 999px;
@@ -424,38 +384,26 @@ body.skin-browser .tab {
   background: var(--surface-2);
 }
 body.skin-arc .tab:hover,
-body.skin-blades .tab:hover,
-body.skin-showcase .tab:hover,
 body.skin-browser .tab:hover {
   color: var(--text);
   background: var(--surface-3);
 }
 body.skin-arc .tab.active,
-body.skin-showcase .tab.active,
 body.skin-browser .tab.active {
   background: var(--accent);
   color: #06121f;
-  font-weight: 600;
-}
-body.skin-blades .tab.active {
-  background: var(--accent);
-  color: #ffffff;
   font-weight: 600;
 }
 
 /* A line of text the width of a television is unreadable, so the body stops
    short of it however wide the window gets. */
 body.skin-arc .modal-body,
-body.skin-blades .modal-body,
-body.skin-showcase .modal-body,
 body.skin-browser .modal-body {
   padding: 24px 46px 40px;
   max-width: 940px;
 }
 
 body.skin-arc .modal-foot,
-body.skin-blades .modal-foot,
-body.skin-showcase .modal-foot,
 body.skin-browser .modal-foot {
   padding: 16px 46px 26px;
   border-top: 1px solid var(--border);
@@ -464,8 +412,6 @@ body.skin-browser .modal-foot {
 
 /* A game's page, full screen rather than a strip down the side. */
 body.skin-arc .detail,
-body.skin-blades .detail,
-body.skin-showcase .detail,
 body.skin-browser .detail {
   left: 0;
   width: 100%;
@@ -475,24 +421,18 @@ body.skin-browser .detail {
 }
 
 body.skin-arc .detail-hero,
-body.skin-blades .detail-hero,
-body.skin-showcase .detail-hero,
 body.skin-browser .detail-hero {
   height: 30vh;
   min-height: 200px;
 }
 
 body.skin-arc .detail-body,
-body.skin-blades .detail-body,
-body.skin-showcase .detail-body,
 body.skin-browser .detail-body {
   padding: 24px 46px 46px;
   max-width: 940px;
 }
 
 body.skin-arc .detail-title,
-body.skin-blades .detail-title,
-body.skin-showcase .detail-title,
 body.skin-browser .detail-title {
   font-size: 30px;
 }

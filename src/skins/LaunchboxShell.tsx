@@ -1,5 +1,5 @@
 /**
- * The original Romcade layout: sidebar, top bar, grid.
+ * The original Playdex layout: sidebar, top bar, grid.
  *
  * Lifted out of `App` unchanged so it is one skin among three rather than the
  * only thing the app can look like.
@@ -72,7 +72,7 @@ export default function LaunchboxShell(props: ShellProps) {
               <div className="empty-inner">
                 <h2>Your library is empty</h2>
                 <p>
-                  Add the folders where your ROMs live, then run a scan. Romcade
+                  Add the folders where your ROMs live, then run a scan. Playdex
                   reads what is already on your disk — it identifies each file
                   by hash and fetches cover art and details for it.
                 </p>

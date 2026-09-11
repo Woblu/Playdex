@@ -1,11 +1,11 @@
 [package]
-name = "romcade"
-version = "0.10.0"
+name = "playdex"
+version = "0.11.0"
 description = "A ROM library manager and emulator launcher."
 authors = ["Woblu"]
 edition = "2021"
 license = "MIT"
-repository = "https://github.com/Woblu/Romcade"
+repository = "https://github.com/Woblu/Playdex"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -13,7 +13,7 @@ repository = "https://github.com/Woblu/Romcade"
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
 # This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
-name = "romcade_lib"
+name = "playdex_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
