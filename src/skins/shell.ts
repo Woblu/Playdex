@@ -11,7 +11,14 @@
 
 import type { Game, LibraryStats, PlatformInfo, SortKey } from "../types";
 
-export type SkinName = "launchbox" | "switch" | "steam";
+export type SkinName =
+  | "launchbox"
+  | "switch"
+  | "steam"
+  | "arc"
+  | "blades"
+  | "showcase"
+  | "browser";
 
 export const SKINS: Array<{ value: SkinName; label: string; blurb: string }> = [
   {
@@ -30,12 +37,35 @@ export const SKINS: Array<{ value: SkinName; label: string; blurb: string }> = [
     label: "Big Picture",
     blurb: "Living-room layout: hero art up top, capsules below, made for a pad.",
   },
+  {
+    value: "arc",
+    label: "Arc",
+    blurb:
+      "One column of slabs down the middle of a dark screen, lit from one side.",
+  },
+  {
+    value: "blades",
+    label: "Blades",
+    blurb:
+      "Panels side by side, one open and the rest turned edge-on. The light one.",
+  },
+  {
+    value: "showcase",
+    label: "Showcase",
+    blurb:
+      "A strip of tiles along the top, and whatever is selected spread out below.",
+  },
+  {
+    value: "browser",
+    label: "Browser",
+    blurb: "A column of cards standing in a slow-drifting field. Unhurried.",
+  },
 ];
 
 export const DEFAULT_SKIN: SkinName = "launchbox";
 
 export function isSkin(value: string | undefined): value is SkinName {
-  return value === "launchbox" || value === "switch" || value === "steam";
+  return SKINS.some((skin) => skin.value === value);
 }
 
 export interface ShellProps {

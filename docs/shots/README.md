@@ -11,6 +11,10 @@ nothing serves them.
 | `skin-romcade.png` | `skin-romcade.webp` | 1600 | Layouts, first card |
 | `skin-console.png` | `skin-console.webp` | 1600 | Layouts, second card |
 | `skin-bigpicture.png` | `skin-bigpicture.webp` | 1600 | Layouts, third card |
+| `skin-arc.png` | `skin-arc.webp` | 1600 | Layouts, fourth card |
+| `skin-blades.png` | `skin-blades.webp` | 1600 | Layouts, fifth card |
+| `skin-showcase.png` | `skin-showcase.webp` | 1600 | Layouts, sixth card |
+| `skin-browser.png` | `skin-browser.webp` | 1600 | Layouts, seventh card |
 
 Anything missing keeps its drawn placeholder, so adding one at a time is fine.
 The page probes each file before swapping it in, which also means a `.webp`
@@ -25,7 +29,11 @@ from PIL import Image
 for src, w in [('shots/library.png', 2048),
                ('shots/skin-romcade.png', 1600),
                ('shots/skin-console.png', 1600),
-               ('shots/skin-bigpicture.png', 1600)]:
+               ('shots/skin-bigpicture.png', 1600),
+               ('shots/skin-arc.png', 1600),
+               ('shots/skin-blades.png', 1600),
+               ('shots/skin-showcase.png', 1600),
+               ('shots/skin-browser.png', 1600)]:
     im = Image.open(src).convert('RGB')
     im.resize((w, round(im.height * w / im.width)), Image.LANCZOS) \
       .save(src.replace('.png', '.webp'), 'WEBP', quality=82, method=6)

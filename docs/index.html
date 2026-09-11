@@ -558,6 +558,15 @@ img.real { display: none; width: 100%; height: auto; }
 .mini .icons u.mid { width: 46px; height: 46px; background: #26405f; }
 .mini .strip { height: 30px; display: flex; gap: 6px; }
 .mini .strip u { flex: 1; border-radius: 3px; }
+/* Primitives for the four later layouts: a stack of rows, and a set of
+   blades where one stands open and the rest are edge-on. */
+.mini .rows { display: flex; flex-direction: column; gap: 5px; flex: 1; }
+.mini .rows u { flex: 1; border-radius: 2px; }
+.mini .rows u.on { background: #2f4a2a; }
+.mini .edge { width: 4px; background: #2f4a2a; border-radius: 2px; }
+.mini .bladeset { display: flex; gap: 5px; flex: 1; }
+.mini .bladeset u { width: 12px; border-radius: 2px; background: #24303f; }
+.mini .bladeset u.wide { flex: 1; width: auto; background: #1b2230; }
 
 /* ---------------------------------------------------------------- cards */
 .cards { display: grid; gap: 1px; background: var(--line-soft); border: 1px solid var(--line-soft); border-radius: 12px; overflow: hidden; }
@@ -969,11 +978,12 @@ img.real { display: none; width: 100%; height: auto; }
     <div class="wrap">
       <div class="section-head">
         <div class="eyebrow">Layouts</div>
-        <h2 id="layouts-h">Three layouts, one library.</h2>
+        <h2 id="layouts-h">Seven layouts, one library.</h2>
         <p class="lede">
           A desk and a television call for different shapes, so each layout is
-          built separately rather than restyled. Every feature is available in all
-          three. Switch under <b>Settings &rarr; Appearance</b>.
+          built separately rather than restyled. Every feature is available in
+          every one of them, and none is named after the hardware it nods at.
+          Switch under <b>Settings &rarr; Appearance</b>.
         </p>
       </div>
 
@@ -1030,6 +1040,71 @@ img.real { display: none; width: 100%; height: auto; }
           <div class="meta">
             <h3>Big Picture</h3>
             <p>For the television. Hero artwork, a left rail and a shelf of capsules, navigable entirely from a controller.</p>
+          </div>
+        </div>
+
+        <div class="skin" data-shot-wrap>
+          <div class="draw">
+            <img class="real" data-shot="shots/skin-arc.webp" decoding="async"
+                 width="1600" height="856" alt="The Arc layout.">
+            <div class="drawn mini" aria-hidden="true">
+              <u class="edge"></u>
+              <div class="rows"><u></u><u class="on"></u><u></u><u></u><u></u></div>
+            </div>
+            <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
+          </div>
+          <div class="meta">
+            <h3>Arc</h3>
+            <p>One column of slabs down the middle of a dark screen, lit from one side.</p>
+          </div>
+        </div>
+
+        <div class="skin" data-shot-wrap>
+          <div class="draw">
+            <img class="real" data-shot="shots/skin-blades.webp" decoding="async"
+                 width="1600" height="856" alt="The Blades layout.">
+            <div class="drawn mini" aria-hidden="true">
+              <div class="bladeset"><u class="wide"></u><u></u><u></u><u></u></div>
+            </div>
+            <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
+          </div>
+          <div class="meta">
+            <h3>Blades</h3>
+            <p>Panels side by side, one open and the rest turned edge-on. The light one.</p>
+          </div>
+        </div>
+
+        <div class="skin" data-shot-wrap>
+          <div class="draw">
+            <img class="real" data-shot="shots/skin-showcase.webp" decoding="async"
+                 width="1600" height="856" alt="The Showcase layout.">
+            <div class="drawn mini" aria-hidden="true">
+              <div class="col">
+                <div class="strip"><u></u><u></u><u></u><u></u><u></u></div>
+                <div class="big"></div>
+              </div>
+            </div>
+            <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
+          </div>
+          <div class="meta">
+            <h3>Showcase</h3>
+            <p>A strip of tiles along the top, and whatever is selected spread out below.</p>
+          </div>
+        </div>
+
+        <div class="skin" data-shot-wrap>
+          <div class="draw">
+            <img class="real" data-shot="shots/skin-browser.webp" decoding="async"
+                 width="1600" height="856" alt="The Browser layout.">
+            <div class="drawn mini" aria-hidden="true">
+              <div class="rows"><u></u><u></u><u class="on"></u><u></u><u></u></div>
+              <u class="rail"></u>
+            </div>
+            <button class="zoom" type="button" hidden><span class="vh">Enlarge this screenshot</span></button>
+          </div>
+          <div class="meta">
+            <h3>Browser</h3>
+            <p>A column of cards standing in a slow-drifting field. Unhurried.</p>
           </div>
         </div>
       </div>

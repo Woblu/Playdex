@@ -289,13 +289,24 @@ states can be deleted; battery saves hold real progress and are refused.
 
 ### Skins
 
-Three layouts, under **Settings → Appearance**:
+Seven layouts, under **Settings → Appearance**:
 
 - **Romcade**: the desktop view. Sidebar, sortable grid, detail panel.
 - **Console**: a home screen. One row of large icons sized against the window,
   a caption underneath, and a row of small round system buttons that each go
   somewhere different, including an "All software" grid.
 - **Big Picture**: living room. Hero art, left rail, capsule shelf.
+- **Arc**: one column of slabs down the middle of a dark screen, lit from one
+  side. The selected slab steps toward the light rather than only changing
+  colour, which is what stops the column reading as a list of links.
+- **Blades**: panels standing side by side, one open and the rest turned
+  edge-on as coloured spines. The only light skin in the set. It claims Back,
+  so Back closes the open blade before the app closes anything.
+- **Showcase**: a strip of tiles along the top and one game spread out
+  underneath. It differs from **Console** in where the weight sits — there the
+  row *is* the screen, here it is trim and the space below is the point.
+- **Browser**: a column of cards standing in a slow-drifting field. Thin
+  letter-spaced type and a lot of space doing nothing, on purpose.
 
 They're separate component trees, not a palette swap, since a console home
 screen is a different shape rather than a different colour. All state and
@@ -303,8 +314,14 @@ fetching stays in `App`, so they can't drift apart in behaviour. Anything a skin
 doesn't draw itself (cheats, saves, ROM hacks) opens the shared detail panel, so
 no feature exists in one skin and not another.
 
-Nothing is traced from another product's assets. The shapes are the obvious ones
-for each context, drawn in CSS here.
+Registering one is two entries — the component in `SHELLS` in `App.tsx` and its
+row in `SKINS` in `skins/shell.ts`. Nothing branches on the name: the body class
+and the settings list are both derived from `SKINS`, and the panel styling comes
+from re-pointing design tokens rather than restyling each control.
+
+Nothing is traced from another product's assets, and no skin is named after the
+hardware it nods at. The shapes are the obvious ones for each context, drawn in
+CSS here.
 
 ### Controller
 

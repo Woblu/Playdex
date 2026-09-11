@@ -24,7 +24,17 @@ import { checkForUpdate, type UpdateInfo } from "./update";
 import LaunchboxShell from "./skins/LaunchboxShell";
 import SwitchShell from "./skins/SwitchShell";
 import SteamShell from "./skins/SteamShell";
-import { DEFAULT_SKIN, isSkin, type ShellProps, type SkinName } from "./skins/shell";
+import ArcShell from "./skins/ArcShell";
+import BladesShell from "./skins/BladesShell";
+import ShowcaseShell from "./skins/ShowcaseShell";
+import BrowserShell from "./skins/BrowserShell";
+import {
+  DEFAULT_SKIN,
+  isSkin,
+  SKINS,
+  type ShellProps,
+  type SkinName,
+} from "./skins/shell";
 import {
   activateFocused,
   focusFirst,
@@ -35,6 +45,24 @@ import {
   type PadInfo,
   type PadLayout,
 } from "./gamepad";
+
+/**
+ * Every skin, keyed by the value stored in settings.
+ *
+ * Registering one is this entry and its entry in `SKINS` — there is no branch
+ * anywhere that has to learn about it, which is the point: the previous chain
+ * of ternaries silently fell back to the desktop layout for anything it did
+ * not recognise.
+ */
+const SHELLS: Record<SkinName, React.ComponentType<ShellProps>> = {
+  launchbox: LaunchboxShell,
+  switch: SwitchShell,
+  steam: SteamShell,
+  arc: ArcShell,
+  blades: BladesShell,
+  showcase: ShowcaseShell,
+  browser: BrowserShell,
+};
 
 export default function App() {
   const [games, setGames] = useState<Game[]>([]);
@@ -347,7 +375,9 @@ export default function App() {
   // dialog dropped into a console screen undoes the whole illusion, and these
   // are the same components either way; only their presentation changes.
   useEffect(() => {
-    document.body.classList.remove("skin-launchbox", "skin-switch", "skin-steam");
+    for (const known of SKINS) {
+      document.body.classList.remove(`skin-${known.value}`);
+    }
     document.body.classList.add(`skin-${skin}`);
   }, [skin]);
 
@@ -515,13 +545,10 @@ export default function App() {
 
   return (
     <>
-      {skin === "switch" ? (
-        <SwitchShell {...shell} />
-      ) : skin === "steam" ? (
-        <SteamShell {...shell} />
-      ) : (
-        <LaunchboxShell {...shell} />
-      )}
+      {(() => {
+        const Shell = SHELLS[skin] ?? LaunchboxShell;
+        return <Shell {...shell} />;
+      })()}
 
       {showDetail && selected && (
         <GameDetail
