@@ -38,12 +38,15 @@ interface Props {
    * thing to go and press was an oversight, not a decision.
    */
   onScanRequest: () => void;
+  /** Go back over every game, including ones that already have artwork. */
+  onRefetchAll: () => void;
 }
 
 export default function SettingsModal({
   onClose,
   onSkinChange,
   onScanRequest,
+  onRefetchAll,
 }: Props) {
   const [tab, setTab] = useState<Tab>("folders");
   const [folders, setFolders] = useState<LibraryFolder[]>([]);
@@ -704,6 +707,25 @@ export default function SettingsModal({
                 </button>
                 <span className="hint" style={{ flex: 1 }}>
                   Saves, then asks each provider whether your keys work.
+                </span>
+              </div>
+
+              <div className="row" style={{ margin: "6px 0 14px" }}>
+                <button
+                  className="btn"
+                  onClick={() => {
+                    onClose();
+                    onRefetchAll();
+                  }}
+                >
+                  Fetch everything again
+                </button>
+                <span className="hint" style={{ flex: 1 }}>
+                  Looks up every game in the library, including ones that
+                  already have artwork, and replaces what it finds. Normally
+                  only games with no metadata are fetched. On a large library
+                  this takes a while and uses a good deal of your ScreenScraper
+                  allowance — the progress card can cancel it.
                 </span>
               </div>
 

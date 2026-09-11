@@ -168,9 +168,18 @@ pub fn cancel_scrape(state: State<AppState>) {
     state.scrape_cancel.store(true, Ordering::SeqCst);
 }
 
-/// Fetch metadata for everything that still needs it.
+/// Fetch metadata across the library.
+///
+/// `refetch` is the difference between the pass that runs after a scan, which
+/// only picks up what has none, and the explicit "fetch everything again",
+/// which goes back over games that already have art. Absent means the former,
+/// so the automatic path cannot start spending quota by accident.
 #[tauri::command]
-pub async fn scrape_library(app: AppHandle, platform: Option<String>) -> Result<String> {
+pub async fn scrape_library(
+    app: AppHandle,
+    platform: Option<String>,
+    refetch: Option<bool>,
+) -> Result<String> {
     let state = app.state::<AppState>();
     if state
         .scrape_running
@@ -183,7 +192,7 @@ pub async fn scrape_library(app: AppHandle, platform: Option<String>) -> Result<
     let client = state.client.clone();
     let media_root = state.media_root.clone();
 
-    let outcome = run_scrape(&app, &client, &media_root, platform).await;
+    let outcome = run_scrape(&app, &client, &media_root, platform, refetch.unwrap_or(false)).await;
 
     let state = app.state::<AppState>();
     state.scrape_running.store(false, Ordering::SeqCst);
@@ -195,12 +204,17 @@ async fn run_scrape(
     client: &reqwest::Client,
     media_root: &std::path::Path,
     platform: Option<String>,
+    refetch: bool,
 ) -> Result<String> {
     let db = app.state::<Db>();
 
     let (games, creds) = {
         let conn = db.0.lock().unwrap();
-        let games = db::games_needing_scrape(&conn, platform.as_deref())?;
+        let games = if refetch {
+            db::games_for_rescrape(&conn, platform.as_deref())?
+        } else {
+            db::games_needing_scrape(&conn, platform.as_deref())?
+        };
         let settings = db::all_settings(&conn)?;
         (games, scrape::Credentials::from_settings(&settings))
     };

@@ -74,8 +74,14 @@ export const cleanMissing = () => invoke<number>("clean_missing");
 
 // -------------------------------------------------------------- scrape
 
-export const scrapeLibrary = (platform: string | null) =>
-  invoke<string>("scrape_library", { platform });
+/**
+ * Fetch metadata across the library.
+ *
+ * `refetch` goes back over games that already have artwork. Left off, only
+ * the ones with none are looked up, which is what should follow a scan.
+ */
+export const scrapeLibrary = (platform: string | null, refetch = false) =>
+  invoke<string>("scrape_library", { platform, refetch });
 
 export const scrapeOne = (id: number) => invoke<string>("scrape_one", { id });
 

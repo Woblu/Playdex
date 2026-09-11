@@ -393,14 +393,35 @@ pub fn get_game(conn: &Connection, id: i64) -> Result<Option<Game>> {
 
 /// Games that still need metadata, oldest first.
 pub fn games_needing_scrape(conn: &Connection, platform: Option<&str>) -> Result<Vec<Game>> {
+    scrape_candidates(conn, platform, true)
+}
+
+/// Every game metadata can be fetched for, whatever it already has.
+///
+/// This is what "fetch everything again" runs. It is deliberately a separate
+/// entry point rather than a flag on the automatic pass: the pass after a scan
+/// must never spend quota re-fetching art it already has, and asking for all of
+/// it must never be quietly narrowed to the ones that happen to have failed.
+pub fn games_for_rescrape(conn: &Connection, platform: Option<&str>) -> Result<Vec<Game>> {
+    scrape_candidates(conn, platform, false)
+}
+
+fn scrape_candidates(
+    conn: &Connection,
+    platform: Option<&str>,
+    only_pending: bool,
+) -> Result<Vec<Game>> {
     // A disc folded into a multi-disc entry is not shown anywhere, so
     // fetching metadata for it would spend a scraper lookup - and on
     // ScreenScraper, part of a daily quota - on something nobody will see.
-    // The playlist standing for the set is scraped instead.
+    // The playlist standing for the set is scraped instead. That holds however
+    // the fetch was asked for, so it is outside the `only_pending` test.
     let mut sql = format!(
-        "SELECT {GAME_COLS} FROM games
-         WHERE scrape_status IN ('pending', 'error') AND disc_playlist_id IS NULL"
+        "SELECT {GAME_COLS} FROM games WHERE disc_playlist_id IS NULL"
     );
+    if only_pending {
+        sql.push_str(" AND scrape_status IN ('pending', 'error')");
+    }
     let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
     if let Some(p) = platform.filter(|p| !p.is_empty()) {
         sql.push_str(" AND platform = ?");
@@ -1146,6 +1167,111 @@ mod repoint_tests {
 
     /// A directory that removes itself, so each test gets its own library.
     mod scratch {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+
+        pub struct Guard(std::path::PathBuf);
+
+        impl Guard {
+            pub fn new(tag: &str) -> Self {
+                let n = NEXT.fetch_add(1, Ordering::Relaxed);
+                let dir =
+                    std::env::temp_dir().join(format!("{tag}-{}-{n}", std::process::id()));
+                let _ = std::fs::remove_dir_all(&dir);
+                std::fs::create_dir_all(&dir).unwrap();
+                Guard(dir)
+            }
+
+            pub fn path(&self) -> &std::path::Path {
+                &self.0
+            }
+        }
+
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod scrape_candidate_tests {
+    use super::{games_for_rescrape, games_needing_scrape, open};
+
+    fn library() -> (scratch2::Guard, rusqlite::Connection) {
+        let dir = scratch2::Guard::new("playdex-scrape");
+        let conn = open(&dir.path().join("library.db")).unwrap();
+        (dir, conn)
+    }
+
+    fn add(conn: &rusqlite::Connection, id: i64, status: &str, platform: &str) {
+        conn.execute(
+            "INSERT INTO games (id, path, filename, title, added_at, platform, scrape_status)
+             VALUES (?1, ?2, 'f', 't', 0, ?3, ?4)",
+            rusqlite::params![id, format!("D:/roms/{id}.rom"), platform, status],
+        )
+        .unwrap();
+    }
+
+    fn ids(games: &[crate::models::Game]) -> Vec<i64> {
+        games.iter().map(|g| g.id).collect()
+    }
+
+    #[test]
+    fn the_automatic_pass_skips_games_that_already_have_metadata() {
+        let (_d, conn) = library();
+        add(&conn, 1, "pending", "nes");
+        add(&conn, 2, "ok", "nes");
+        add(&conn, 3, "error", "nes");
+        add(&conn, 4, "notfound", "nes");
+
+        // 'ok' is left alone, and so is 'notfound': looking again for something
+        // the providers have already said they do not have spends quota for
+        // nothing.
+        assert_eq!(ids(&games_needing_scrape(&conn, None).unwrap()), vec![1, 3]);
+    }
+
+    #[test]
+    fn fetching_everything_again_includes_games_that_already_matched() {
+        let (_d, conn) = library();
+        add(&conn, 1, "pending", "nes");
+        add(&conn, 2, "ok", "nes");
+        add(&conn, 3, "error", "nes");
+        add(&conn, 4, "notfound", "nes");
+
+        assert_eq!(
+            ids(&games_for_rescrape(&conn, None).unwrap()),
+            vec![1, 2, 3, 4]
+        );
+    }
+
+    #[test]
+    fn both_skip_a_disc_folded_into_a_multi_disc_entry() {
+        let (_d, conn) = library();
+        add(&conn, 1, "ok", "psx");
+        add(&conn, 2, "pending", "psx");
+        // Disc two of the set standing behind game 1: not shown anywhere, so
+        // never worth a lookup however the fetch was asked for.
+        conn.execute("UPDATE games SET disc_playlist_id = 1 WHERE id = 2", [])
+            .unwrap();
+
+        assert!(games_needing_scrape(&conn, None).unwrap().is_empty());
+        assert_eq!(ids(&games_for_rescrape(&conn, None).unwrap()), vec![1]);
+    }
+
+    #[test]
+    fn both_honour_a_platform_filter() {
+        let (_d, conn) = library();
+        add(&conn, 1, "ok", "nes");
+        add(&conn, 2, "ok", "snes");
+
+        assert_eq!(ids(&games_for_rescrape(&conn, Some("snes")).unwrap()), vec![2]);
+        assert!(games_for_rescrape(&conn, Some("gb")).unwrap().is_empty());
+    }
+
+    mod scratch2 {
         use std::sync::atomic::{AtomicU32, Ordering};
 
         static NEXT: AtomicU32 = AtomicU32::new(0);

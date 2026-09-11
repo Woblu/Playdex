@@ -163,7 +163,18 @@ libretro-thumbnails repository listing rather than guessed. A wrong folder name
 there is a silent 404.
 
 Finish a scan and metadata fetches automatically for anything new. Only entries
-that still need it get looked up, and the progress toast can cancel it.
+that still need it get looked up, and the progress toast can cancel it. Games
+already marked *notfound* are left alone too: asking again for something both
+providers have already said they do not have spends quota for nothing.
+
+**Settings → Metadata → Fetch everything again** goes back over the whole
+library instead, including games that already have artwork, and replaces what
+it finds. It is the way to pick up art that has been added to a provider since
+you last looked, or to redo a library scraped with worse credentials. It is a
+separate query rather than a flag on the automatic pass, so the pass after a
+scan can never start spending quota by accident. On a large library it takes a
+while and uses a good deal of a daily ScreenScraper allowance, which is why it
+lives in Settings rather than next to Scan.
 
 ScreenScraper goes first, keyed on the ROM's hash, so a correct dump matches
 exactly instead of by fuzzy name. If it has no match or its quota is spent,

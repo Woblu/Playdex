@@ -299,6 +299,22 @@ export default function App() {
     });
 
   /**
+   * Go back over everything, including games that already have artwork.
+   *
+   * Deliberately whole-library rather than honouring the current system
+   * filter: it is reached from Settings, where the filter is out of sight, and
+   * a button called "fetch everything" quietly doing one shelf would be a
+   * worse surprise than doing what it says.
+   */
+  const handleRefetchAll = () =>
+    run(async () => {
+      const summary = await api.scrapeLibrary(null, true);
+      setScrape((prev) =>
+        prev ? { ...prev, done: true, status: summary } : prev,
+      );
+    });
+
+  /**
    * One game at a time.
    *
    * The pad is stopped while a game runs, but that leaves the moment between
@@ -569,6 +585,7 @@ export default function App() {
         <SettingsModal
           onSkinChange={setSkin}
           onScanRequest={() => void handleScan()}
+          onRefetchAll={() => void handleRefetchAll()}
           onClose={() => {
             setSettingsOpen(false);
             void loadSkin();
