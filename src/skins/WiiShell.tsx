@@ -78,20 +78,44 @@ export default function WiiShell(props: ShellProps) {
     setPage(0);
   }, [platform, favoritesOnly, search]);
 
-  // Follow the selection when it moves off this page — the pad can walk past
-  // the last channel, and the page has to keep up with it.
+  /**
+   * Turn to a page, and take the selection with you.
+   *
+   * The two have to move together. Paging without moving the selection leaves
+   * the tray describing a channel that is not on screen, and — worse — leaves
+   * the effect below with a disagreement to resolve, which it resolves by
+   * turning the page straight back. Selecting the first channel of the page
+   * you asked for means there is never a disagreement in the first place.
+   */
+  const turnTo = (next: number) => {
+    const target = Math.min(Math.max(next, 0), pageCount - 1);
+    setPage(target);
+    const first = games[target * PER_PAGE];
+    if (first) onSelect(first.id);
+  };
+
+  // Follow the selection when it lands on another page, which happens when the
+  // pad walks off the end of a row, or when a search leaves the selected game
+  // somewhere else entirely.
+  //
+  // Keyed on the selection actually changing, not on the page: an earlier
+  // version listed the page in its dependencies, so turning a page re-ran this,
+  // found the selection still on the page before, and turned it back. The
+  // arrows appeared to do nothing at all.
+  const followed = useRef<number | null>(null);
   useEffect(() => {
     if (selectedId == null) return;
+    if (followed.current === selectedId) return;
+    followed.current = selectedId;
     const index = games.findIndex((g) => g.id === selectedId);
     if (index < 0) return;
-    const wanted = Math.floor(index / PER_PAGE);
-    if (wanted !== safePage) setPage(wanted);
-  }, [selectedId, games, safePage]);
+    setPage(Math.floor(index / PER_PAGE));
+  }, [selectedId, games]);
 
   useEffect(() => {
     registerBack(() => {
       if (safePage > 0) {
-        setPage(0);
+        turnTo(0);
         return true;
       }
       return false;
@@ -150,7 +174,7 @@ export default function WiiShell(props: ShellProps) {
       <div className="wii-stage">
         <button
           className="wii-arrow left"
-          onClick={() => setPage((p) => Math.max(0, p - 1))}
+          onClick={() => turnTo(safePage - 1)}
           disabled={safePage === 0}
           aria-label="Previous page"
           data-nav
@@ -205,7 +229,7 @@ export default function WiiShell(props: ShellProps) {
 
         <button
           className="wii-arrow right"
-          onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+          onClick={() => turnTo(safePage + 1)}
           disabled={safePage >= pageCount - 1}
           aria-label="Next page"
           data-nav
