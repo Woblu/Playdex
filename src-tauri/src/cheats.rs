@@ -497,15 +497,44 @@ pub struct RetroArchCheats {
     pub auto_apply: bool,
 }
 
-fn config_path_for(exe: &Path) -> Option<PathBuf> {
-    let mut candidates: Vec<PathBuf> = Vec::new();
+/// Where RetroArch keeps `retroarch.cfg`, in the order worth trying.
+///
+/// Beside the executable first, which is what a portable unzip looks like,
+/// then the per-user location for each platform. These mirror the core
+/// directories in `detect.rs`: the two are the same question asked about
+/// different files, so they should not be allowed to drift apart.
+///
+/// Every platform's paths are listed rather than compiled in per target. They
+/// cost a `is_file` each, none of them can exist on the wrong system, and it
+/// means one test covers the lot wherever it runs.
+///
+/// Pure so it can be tested without reaching into the real environment.
+fn config_candidates(exe: &Path, home: Option<&Path>, appdata: Option<&Path>) -> Vec<PathBuf> {
+    let mut out: Vec<PathBuf> = Vec::new();
     if let Some(dir) = exe.parent() {
-        candidates.push(dir.join("retroarch.cfg"));
+        out.push(dir.join("retroarch.cfg"));
+        // A macOS bundle keeps it beside the binary, inside Contents.
+        out.push(dir.join("../Resources/retroarch.cfg"));
     }
-    if let Ok(appdata) = std::env::var("APPDATA") {
-        candidates.push(PathBuf::from(appdata).join("RetroArch").join("retroarch.cfg"));
+    if let Some(appdata) = appdata {
+        out.push(appdata.join("RetroArch").join("retroarch.cfg"));
     }
-    candidates.into_iter().find(|p| p.is_file())
+    if let Some(home) = home {
+        out.push(home.join("Library/Application Support/RetroArch/retroarch.cfg"));
+        out.push(home.join(".config/retroarch/retroarch.cfg"));
+        out.push(home.join(".var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg"));
+    }
+    out
+}
+
+fn config_path_for(exe: &Path) -> Option<PathBuf> {
+    // APPDATA is Windows-only and HOME is not set on Windows, so each platform
+    // contributes only the paths that mean anything on it.
+    let home = std::env::var_os("HOME").map(PathBuf::from);
+    let appdata = std::env::var_os("APPDATA").map(PathBuf::from);
+    config_candidates(exe, home.as_deref(), appdata.as_deref())
+        .into_iter()
+        .find(|p| p.is_file())
 }
 
 /// Read one setting out of RetroArch's config, expanding the ":" prefix it
@@ -831,5 +860,80 @@ cheat_database_path = \":\\cheats\"
         assert!(text.contains("audio_enable = \"true\""));
 
         let _ = std::fs::remove_dir_all(&dir);
+    }
+}
+
+#[cfg(test)]
+mod config_location_tests {
+    use super::config_candidates;
+    use std::path::{Path, PathBuf};
+
+    fn candidates(exe: &str, home: Option<&str>, appdata: Option<&str>) -> Vec<String> {
+        config_candidates(
+            Path::new(exe),
+            home.map(Path::new),
+            appdata.map(Path::new),
+        )
+        .iter()
+        .map(|p| p.to_string_lossy().replace('\\', "/"))
+        .collect()
+    }
+
+    #[test]
+    fn a_portable_install_is_looked_at_first() {
+        let got = candidates("/opt/RetroArch/retroarch", Some("/home/me"), None);
+        assert_eq!(got[0], "/opt/RetroArch/retroarch.cfg");
+    }
+
+    #[test]
+    fn windows_gets_its_appdata_path() {
+        let got = candidates(
+            "C:/Program Files/RetroArch/retroarch.exe",
+            None,
+            Some("C:/Users/me/AppData/Roaming"),
+        );
+        assert!(
+            got.iter()
+                .any(|p| p == "C:/Users/me/AppData/Roaming/RetroArch/retroarch.cfg"),
+            "{got:?}"
+        );
+    }
+
+    /// The reason this function exists. It used to read APPDATA and nothing
+    /// else, so on Linux and macOS it found no config at all and cheats and
+    /// save handling both quietly did nothing.
+    #[test]
+    fn linux_and_mac_get_their_own_paths() {
+        let got = candidates("/usr/bin/retroarch", Some("/home/me"), None);
+        for expected in [
+            "/home/me/Library/Application Support/RetroArch/retroarch.cfg",
+            "/home/me/.config/retroarch/retroarch.cfg",
+            "/home/me/.var/app/org.libretro.RetroArch/config/retroarch/retroarch.cfg",
+        ] {
+            assert!(got.iter().any(|p| p == expected), "missing {expected}: {got:?}");
+        }
+    }
+
+    #[test]
+    fn a_mac_bundle_looks_beside_the_binary_in_resources() {
+        let got = candidates(
+            "/Applications/RetroArch.app/Contents/MacOS/RetroArch",
+            Some("/Users/me"),
+            None,
+        );
+        assert!(
+            got.iter()
+                .any(|p| p == "/Applications/RetroArch.app/Contents/MacOS/../Resources/retroarch.cfg"),
+            "{got:?}"
+        );
+    }
+
+    #[test]
+    fn nothing_is_offered_when_the_environment_is_empty() {
+        let got = config_candidates(Path::new("retroarch"), None, None);
+        // Only the two beside a bare executable, and with no parent directory
+        // to speak of neither can point anywhere surprising.
+        assert!(got.len() <= 2, "{got:?}");
+        assert!(!got.iter().any(|p: &PathBuf| p.to_string_lossy().contains("RetroArch/retroarch.cfg")));
     }
 }

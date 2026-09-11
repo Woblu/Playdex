@@ -7,10 +7,18 @@
 #   git commit -am "Playdex 0.2.0"
 #   git tag v0.2.0 && git push && git push --tags
 #
-# The tag is what starts this; nothing publishes on an ordinary push. The
-# action builds the installer, signs it with the private key held in repo
-# secrets, and uploads the installer alongside a `latest.json` manifest — the
-# file `plugins.updater.endpoints` in tauri.conf.json points at.
+# The tag is what starts this; nothing publishes on an ordinary push. Each
+# platform builds its own installers, signs them with the private key held in
+# repo secrets, and adds its entry to one shared `latest.json` — the file
+# `plugins.updater.endpoints` in tauri.conf.json points at.
+#
+# Three jobs rather than one, which is the shape a multi-platform release has
+# to take. Left to create the release themselves the builds would race: three
+# jobs finishing together all look for a release that is not there yet and all
+# try to make it. So one job makes it as a draft, the builds attach to that
+# draft, and a last job publishes it once they are done. Nobody sees a
+# half-built release, and the updater never points at one either, since
+# `releases/latest` skips drafts.
 #
 # Two secrets are required, set under Settings -> Secrets and variables ->
 # Actions:
@@ -32,8 +40,62 @@ permissions:
   contents: write
 
 jobs:
-  release:
-    runs-on: windows-latest
+  create-release:
+    runs-on: ubuntu-22.04
+    outputs:
+      release_id: ${{ steps.make.outputs.result }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create the draft release
+        id: make
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            // The message of the commit the tag points at becomes the release
+            // notes, and the updater shows them in the notice inside the app —
+            // so make that commit message the one you want users to read.
+            const { data: commit } = await github.rest.repos.getCommit({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+            });
+            const tag = context.ref.replace('refs/tags/', '');
+            const { data } = await github.rest.repos.createRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag_name: tag,
+              name: `Playdex ${tag}`,
+              body: commit.commit.message,
+              draft: true,
+              prerelease: false,
+            });
+            return data.id;
+
+  build:
+    needs: create-release
+    strategy:
+      # One platform failing should not throw away the others, so whatever did
+      # build can still be looked at and shipped.
+      fail-fast: false
+      matrix:
+        include:
+          # One bundle covering both Apple architectures, so there is a single
+          # download rather than a choice most people should not have to make.
+          - platform: macos-latest
+            args: "--target universal-apple-darwin"
+            rust-targets: "aarch64-apple-darwin,x86_64-apple-darwin"
+          # Deliberately not the newest runner. A binary built against an older
+          # glibc runs on newer distributions; the reverse does not.
+          - platform: ubuntu-22.04
+            args: ""
+            rust-targets: ""
+          - platform: windows-latest
+            args: ""
+            rust-targets: ""
+
+    runs-on: ${{ matrix.platform }}
 
     steps:
       - uses: actions/checkout@v4
@@ -44,29 +106,65 @@ jobs:
           cache: npm
 
       - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.rust-targets }}
 
       # Rust builds are slow from cold; this keeps a tag push to a few minutes.
+      # Keyed per runner OS automatically, so the three do not share one entry.
       - uses: swatinem/rust-cache@v2
         with:
           workspaces: ./src-tauri -> target
 
+      # Tauri draws through the system webview, which on Linux means WebKitGTK
+      # and its build headers. The rest is what the bundler needs to produce a
+      # .deb and an AppImage.
+      - name: Linux build dependencies
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libappindicator3-dev \
+            librsvg2-dev \
+            patchelf \
+            build-essential \
+            libgtk-3-dev \
+            libxdo-dev \
+            libssl-dev \
+            file \
+            wget
+
       - run: npm ci
 
-      - name: Build, sign and publish
+      - name: Build, sign and attach
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          tagName: ${{ github.ref_name }}
-          releaseName: Playdex ${{ github.ref_name }}
-          # The message of the commit the tag points at becomes the release
-          # notes, and the updater shows them in the notice inside the app —
-          # so make that commit message the one you want users to read.
-          releaseBody: ${{ github.event.head_commit.message }}
-          releaseDraft: false
-          prerelease: false
-          # Produces latest.json next to the installer, which is what the
-          # endpoint in tauri.conf.json fetches.
+          releaseId: ${{ needs.create-release.outputs.release_id }}
+          args: ${{ matrix.args }}
+          # Each platform adds its own entry to the shared latest.json, which
+          # is what the endpoint in tauri.conf.json fetches.
           includeUpdaterJson: true
+
+  publish-release:
+    needs: [create-release, build]
+    # Every platform has to have built. If one did not, the release stays a
+    # draft: `releases/latest` skips drafts, so everyone keeps being offered
+    # the last good version instead of a release missing their installer, and
+    # the half-built one is still there to look at.
+    if: needs.build.result == 'success'
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Take the release out of draft
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: ${{ needs.create-release.outputs.release_id }},
+              draft: false,
+            });

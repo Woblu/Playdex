@@ -389,7 +389,18 @@ npm run tauri dev      # development
 npm run tauri build    # installer / bundled app
 ```
 
-Needs Rust, and on Windows the MSVC build tools plus the WebView2 runtime.
+Needs Rust, and the platform's webview toolchain:
+
+- **Windows**: the MSVC build tools plus the WebView2 runtime (Windows 11 ships
+  with it).
+- **macOS**: Xcode command line tools. WebKit is part of the system.
+- **Linux**: `libwebkit2gtk-4.1-dev`, `libgtk-3-dev`, `libxdo-dev`,
+  `libssl-dev`, `librsvg2-dev`, `libappindicator3-dev` and `patchelf`. The
+  release workflow installs exactly this list, so it is the one to copy.
+
+Releases are built for all three. `.github/workflows/release.yml` runs one job
+per platform against a draft release and publishes it only once every one of
+them has finished, so a release never ships missing somebody's installer.
 
 ### Credentials
 
