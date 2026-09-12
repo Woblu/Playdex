@@ -406,11 +406,48 @@ None of that is fixed by asking Defender nicely. What actually helps, in order:
    <https://www.microsoft.com/en-us/wdsi/filesubmission>, as a software
    developer, marked "incorrectly detected". These are normally corrected
    within a few days, and it fixes it for everyone rather than one machine.
-3. **Sign the installers.** The real fix. [SignPath](https://signpath.io/) has
-   a free certificate programme for open source projects, which this qualifies
-   for; Azure Trusted Signing is about ten dollars a month otherwise. Signing
-   gives Windows a publisher to trust and stops the warnings escalating into
-   deletions.
+3. **Sign the installers.** The real fix, and free for this project. See
+   below.
+
+### Signing it, for free
+
+[SignPath Foundation](https://signpath.org/) issues code signing certificates
+to open source projects at no cost, and signs through their own service rather
+than handing over a key: the private key stays in their HSM and the CI run
+submits the file to be signed. Their
+[conditions](https://signpath.org/terms.html) are that the project has no
+malware or bundled unwanted software, uses an OSI-approved licence with no
+commercial dual-licensing and no proprietary components, is actively
+maintained, is already released in the form being signed, and describes what it
+does on its download page. The team doing the signing has to be the team that
+maintains the code and owns the repository.
+
+Playdex meets all of that: MIT throughout, nothing proprietary, released, and
+described on its own page. Apply at <https://signpath.org/apply.html>. It is a
+human review, so expect it to take a little while rather than minutes. Once a
+project is accepted, signing becomes a step in `release.yml` that submits the
+built installers and gets signed ones back.
+
+The alternatives, for completeness:
+
+- **Azure Trusted Signing**, about ten dollars a month. Cheap rather than free,
+  and needs identity validation.
+- **Certum's open source certificate**, roughly thirty euros a year, on a
+  hardware token they post to you.
+- **A self-signed certificate is not an option.** It is free, and it does
+  nothing here — Windows only trusts a certificate chaining to a root it
+  already knows, so a self-signed build is exactly as untrusted as an unsigned
+  one, with the added downside of looking like it is trying to appear signed.
+
+Until then, every release carries a **build provenance attestation**: a signed
+statement that the files came from this repository, at a named commit, out of a
+named workflow run. It does not make Windows trust anything — only Authenticode
+does — but it turns "this is really our build" from something you have to take
+on trust into something anyone can check:
+
+```bash
+gh attestation verify Playdex_x.y.z_x64_en-US.msi --repo Woblu/Playdex
+```
 
 To check a download is the real thing rather than trusting this page, compare
 it against the release:

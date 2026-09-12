@@ -75,6 +75,12 @@ jobs:
 
   build:
     needs: create-release
+    permissions:
+      contents: write
+      # Needed to sign the provenance attestation below. The signing key is
+      # short-lived and issued to this workflow run; nothing is stored.
+      id-token: write
+      attestations: write
     strategy:
       # One platform failing should not throw away the others, so whatever did
       # build can still be looked at and shipped.
@@ -137,6 +143,7 @@ jobs:
       - run: npm ci
 
       - name: Build, sign and attach
+        id: tauri
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -148,6 +155,24 @@ jobs:
           # Each platform adds its own entry to the shared latest.json, which
           # is what the endpoint in tauri.conf.json fetches.
           includeUpdaterJson: true
+
+      # Provenance: a signed statement that these exact files came out of this
+      # repository, at this commit, from this workflow. Anyone can check it
+      # with `gh attestation verify <file> --repo Woblu/Playdex`.
+      #
+      # This is not Authenticode and it will not stop Windows deleting an
+      # unsigned installer — only a code signing certificate does that. What it
+      # does is make the claim checkable rather than something people have to
+      # take on trust, which is also the evidence worth attaching to a false
+      # positive report.
+      #
+      # Allowed to fail. Provenance is worth having but it is not worth losing
+      # a release over, and the job failing here would leave one stuck in draft.
+      - name: Attest the installers
+        continue-on-error: true
+        uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: ${{ join(fromJSON(steps.tauri.outputs.artifactPaths), ',') }}
 
   publish-release:
     needs: [create-release, build]
