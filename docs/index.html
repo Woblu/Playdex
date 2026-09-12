@@ -190,7 +190,7 @@ p { margin: 0; }
 .brand {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
   font-weight: 660;
   letter-spacing: -0.02em;
   font-size: 17px;
@@ -198,6 +198,16 @@ p { margin: 0; }
   text-decoration: none;
   margin-right: auto;
 }
+.mark {
+  display: block;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  image-rendering: pixelated;
+}
+.hero-mark-icon { width: 40px; height: 40px; }
+.foot-mark { width: 20px; height: 20px; }
+
 .wordmark {
   display: block;
   width: auto;
@@ -789,6 +799,7 @@ img.real { display: none; width: 100%; height: auto; }
 <nav class="nav" id="nav" aria-label="Main">
   <div class="wrap nav-in">
     <a class="brand" href="#top">
+      <img class="mark" src="logo.svg" alt="">
       <img class="wordmark" src="playdex-wordmark.webp" width="370" height="128"
            alt="Playdex">
     </a>
@@ -835,6 +846,7 @@ img.real { display: none; width: 100%; height: auto; }
   <div class="wrap">
     <div class="hero-in">
       <div class="hero-mark">
+        <img class="mark hero-mark-icon" src="logo.svg" alt="">
         <img class="wordmark hero-wordmark" src="playdex-wordmark.webp"
              width="370" height="128" alt="Playdex">
         <span>Windows, macOS &amp; Linux &middot; free &middot; open source</span>
@@ -1289,6 +1301,7 @@ img.real { display: none; width: 100%; height: auto; }
 <footer class="foot">
   <div class="wrap foot-in">
     <a class="brand" href="#top" style="margin-right:auto">
+      <img class="mark foot-mark" src="logo.svg" alt="">
       <img class="wordmark foot-wordmark" src="playdex-wordmark.webp"
            width="370" height="128" alt="Playdex">
     </a>
