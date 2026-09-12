@@ -577,6 +577,7 @@ export default function App() {
             void refreshGames();
             void refreshSidebar();
           }}
+          onArtworkChanged={() => void refreshGames()}
           busy={busy}
         />
       )}

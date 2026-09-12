@@ -198,7 +198,14 @@ p { margin: 0; }
   text-decoration: none;
   margin-right: auto;
 }
-.brand img { width: 24px; height: 24px; image-rendering: pixelated; }
+.wordmark {
+  display: block;
+  width: auto;
+  /* Sized by height, since the artwork is a fixed 2.89:1 wordmark. */
+  height: 21px;
+}
+.hero-wordmark { height: 46px; }
+.foot-wordmark { height: 18px; }
 .nav a.link {
   color: var(--muted);
   text-decoration: none;
@@ -322,7 +329,6 @@ p { margin: 0; }
   gap: 12px;
   margin-bottom: 26px;
 }
-.hero-mark img { width: 44px; height: 44px; image-rendering: pixelated; }
 .hero-mark span {
   font-family: var(--mono);
   font-size: 11px;
@@ -783,8 +789,8 @@ img.real { display: none; width: 100%; height: auto; }
 <nav class="nav" id="nav" aria-label="Main">
   <div class="wrap nav-in">
     <a class="brand" href="#top">
-      <img src="logo.svg" alt="">
-      Playdex
+      <img class="wordmark" src="playdex-wordmark.webp" width="370" height="128"
+           alt="Playdex">
     </a>
     <a class="link only-wide" href="#how">How it works</a>
     <a class="link only-wide" href="#layouts">Layouts</a>
@@ -829,7 +835,8 @@ img.real { display: none; width: 100%; height: auto; }
   <div class="wrap">
     <div class="hero-in">
       <div class="hero-mark">
-        <img src="logo.svg" alt="Playdex">
+        <img class="wordmark hero-wordmark" src="playdex-wordmark.webp"
+             width="370" height="128" alt="Playdex">
         <span>Windows, macOS &amp; Linux &middot; free &middot; open source</span>
       </div>
       <h1>A ROM library manager<br><span class="accent">and emulator launcher.</span></h1>
@@ -1281,9 +1288,9 @@ img.real { display: none; width: 100%; height: auto; }
 
 <footer class="foot">
   <div class="wrap foot-in">
-    <a class="brand" href="#top" style="margin-right:auto; font-size:15px">
-      <img src="logo.svg" alt="">
-      Playdex
+    <a class="brand" href="#top" style="margin-right:auto">
+      <img class="wordmark foot-wordmark" src="playdex-wordmark.webp"
+           width="370" height="128" alt="Playdex">
     </a>
     <a href="https://github.com/Woblu/Playdex">GitHub</a>
     <a href="https://github.com/Woblu/Playdex/releases">Releases</a>

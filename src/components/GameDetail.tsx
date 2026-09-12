@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useState } from "react";
 
 import * as api from "../api";
-import { artUrl, formatDate, formatPlaytime, formatSize } from "../api";
+import { artUrl, errorMessage, formatDate, formatPlaytime, formatSize } from "../api";
 import type {
   Cheat,
   EmulatorConfig,
@@ -25,6 +25,8 @@ interface Props {
   onRemove: () => void;
   onSetPlatform: (slug: string) => void;
   onHackAdded: () => void;
+  /** The cover changed, so the grid and the shells need the new one. */
+  onArtworkChanged: () => void;
 }
 
 export default function GameDetail({
@@ -37,6 +39,7 @@ export default function GameDetail({
   onRemove,
   onSetPlatform,
   onHackAdded,
+  onArtworkChanged,
 }: Props) {
   const [allPlatforms, setAllPlatforms] = useState<PlatformInfo[]>([]);
   const [confirmUnpack, setConfirmUnpack] = useState(false);
@@ -51,6 +54,7 @@ export default function GameDetail({
   const isArchived = /\.(zip|7z)$/i.test(game.path);
   const [command, setCommand] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
+  const [artNote, setArtNote] = useState<string | null>(null);
   /** This game's own emulator, when it has been given one. */
   const [emu, setEmu] = useState<EmulatorConfig | null>(null);
   /** The discs behind a multi-disc entry. Empty for an ordinary game. */
@@ -318,6 +322,55 @@ export default function GameDetail({
             Refetch
           </button>
         </div>
+
+        {/* For the games no provider has ever heard of — a hack, an obscure
+            dump, somebody's homebrew — fetching will never produce a cover, so
+            the only way to have one is to supply it. A chosen picture also
+            outranks anything fetched later, which is why "Fetch everything
+            again" cannot quietly undo this. */}
+        <div className="detail-actions">
+          <button
+            className="btn"
+            disabled={busy}
+            onClick={async () => {
+              setArtNote(null);
+              setCommandError(null);
+              try {
+                const path = await api.chooseCustomCover(game.id);
+                if (path) {
+                  setArtNote("Cover set from your own image.");
+                  onArtworkChanged();
+                }
+              } catch (e) {
+                setCommandError(errorMessage(e));
+              }
+            }}
+          >
+            {game.coverCustom ? "Replace image" : "Choose an image"}
+          </button>
+
+          {game.coverCustom && (
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={async () => {
+                setArtNote(null);
+                setCommandError(null);
+                try {
+                  await api.clearCustomCover(game.id);
+                  setArtNote("Back to fetched artwork. Refetch to look again.");
+                  onArtworkChanged();
+                } catch (e) {
+                  setCommandError(errorMessage(e));
+                }
+              }}
+            >
+              Use fetched artwork
+            </button>
+          )}
+        </div>
+
+        {artNote && <div className="notice">{artNote}</div>}
 
         {scrapeNote && <div className="notice">{scrapeNote}</div>}
         {commandError && <div className="error-banner">{commandError}</div>}

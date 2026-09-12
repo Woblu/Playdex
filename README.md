@@ -184,6 +184,24 @@ guessed at. Both providers report which system they matched, which fills in a
 platform Playdex couldn't work out on its own. A platform already on the record
 is left alone since you may have set it by hand.
 
+### Artwork you supply yourself
+
+Some games will never be found. A ROM hack, an obscure dump, somebody's
+homebrew — no amount of refetching produces a cover for something no provider
+has a record of. **Choose an image** in a game's own panel opens a file picker
+and takes any image the webview can display: PNG, JPEG, WebP, GIF, BMP or AVIF.
+
+The file is copied into that game's media folder rather than referenced where
+it sits. Artwork is already handled this way while ROMs are not, and for the
+same reason: the library owns its artwork, and pointing at something in a
+Downloads folder means the cover vanishes the next time that folder is tidied.
+
+A cover chosen by hand outranks anything fetched afterwards. `apply_metadata`
+skips the cover column when `cover_custom` is set, so **Fetch everything
+again** cannot quietly undo the work of picking artwork by hand — while
+everything else in that fetch still lands. **Use fetched artwork** gives the
+choice up again.
+
 Artwork downloads once into the app data directory and is served to the UI over
 a private `media://` protocol scoped to that directory.
 

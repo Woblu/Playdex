@@ -1,6 +1,6 @@
 [package]
 name = "playdex"
-version = "0.13.0"
+version = "0.14.0"
 description = "A ROM library manager and emulator launcher."
 authors = ["Woblu"]
 edition = "2021"

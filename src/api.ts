@@ -85,6 +85,19 @@ export const scrapeLibrary = (platform: string | null, refetch = false) =>
 
 export const scrapeOne = (id: number) => invoke<string>("scrape_one", { id });
 
+/**
+ * Pick a picture for a game by hand.
+ *
+ * Opens a file dialog and copies the chosen image into the game's own media
+ * folder. Resolves to the new cover path, or null if the dialog was dismissed.
+ */
+export const chooseCustomCover = (id: number) =>
+  invoke<string | null>("choose_custom_cover", { id });
+
+/** Give up a hand-picked cover, so fetches can supply one again. */
+export const clearCustomCover = (id: number) =>
+  invoke<void>("clear_custom_cover", { id });
+
 export const cancelScrape = () => invoke<void>("cancel_scrape");
 
 // -------------------------------------------------------------- launch

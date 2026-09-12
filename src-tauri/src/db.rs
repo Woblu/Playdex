@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS play_sessions (
 const GAME_COLS: &str = "id, path, filename, platform, size, crc32, md5, sha1, inner_name, \
      title, description, developer, publisher, genre, release_date, players, rating, region, \
      cover_path, screenshot_path, logo_path, scrape_status, scrape_source, favorite, hidden, \
-     play_count, play_seconds, last_played, added_at, base_game_id, patch_path";
+     play_count, play_seconds, last_played, added_at, base_game_id, patch_path,      cover_custom";
 
 /// Repoint stored paths after the app data directory has moved.
 ///
@@ -226,6 +226,9 @@ fn migrate(conn: &Connection) -> Result<()> {
         // this row is the playlist standing in for a set of them.
         ("disc_playlist_id", "INTEGER"),
         ("is_disc_playlist", "INTEGER NOT NULL DEFAULT 0"),
+        // Set when the cover was chosen by hand rather than fetched, which is
+        // what stops a later metadata fetch replacing it.
+        ("cover_custom", "INTEGER NOT NULL DEFAULT 0"),
     ] {
         let mut stmt = conn.prepare("PRAGMA table_info(games)")?;
         let existing: Vec<String> = stmt
@@ -298,6 +301,7 @@ fn row_to_game(row: &Row) -> rusqlite::Result<Game> {
         added_at: row.get(28)?,
         base_game_id: row.get(29)?,
         patch_path: row.get(30)?,
+        cover_custom: row.get::<_, i64>(31)? != 0,
     })
 }
 
@@ -460,7 +464,12 @@ pub fn apply_metadata(conn: &Connection, id: i64, m: &Metadata) -> Result<()> {
             release_date    = COALESCE(?7, release_date),
             players         = COALESCE(?8, players),
             rating          = COALESCE(?9, rating),
-            cover_path      = COALESCE(?10, cover_path),
+            -- A cover chosen by hand is never replaced by a fetched one.
+            -- Fetching everything again would otherwise quietly undo the
+            -- work of picking artwork for a game no provider knows.
+            cover_path      = CASE WHEN cover_custom = 1
+                                   THEN cover_path
+                                   ELSE COALESCE(?10, cover_path) END,
             screenshot_path = COALESCE(?11, screenshot_path),
             logo_path       = COALESCE(?12, logo_path),
             scrape_status   = 'ok',
@@ -481,6 +490,31 @@ pub fn apply_metadata(conn: &Connection, id: i64, m: &Metadata) -> Result<()> {
             m.logo_path,
             m.source
         ],
+    )?;
+    Ok(())
+}
+
+/// Record a cover the player chose themselves.
+///
+/// Marking it also matters: `apply_metadata` leaves a custom cover alone, so
+/// this is what makes the choice stick through a later fetch.
+pub fn set_custom_cover(conn: &Connection, id: i64, path: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE games SET cover_path = ?2, cover_custom = 1 WHERE id = ?1",
+        params![id, path],
+    )?;
+    Ok(())
+}
+
+/// Give up a hand-picked cover, so metadata fetches can supply one again.
+///
+/// The file itself is left in place. It is small, it is in this game's own
+/// media folder, and removing the whole folder is already what happens when
+/// the game is removed.
+pub fn clear_custom_cover(conn: &Connection, id: i64) -> Result<()> {
+    conn.execute(
+        "UPDATE games SET cover_path = NULL, cover_custom = 0 WHERE id = ?1",
+        params![id],
     )?;
     Ok(())
 }
@@ -1272,6 +1306,128 @@ mod scrape_candidate_tests {
     }
 
     mod scratch2 {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+
+        pub struct Guard(std::path::PathBuf);
+
+        impl Guard {
+            pub fn new(tag: &str) -> Self {
+                let n = NEXT.fetch_add(1, Ordering::Relaxed);
+                let dir =
+                    std::env::temp_dir().join(format!("{tag}-{}-{n}", std::process::id()));
+                let _ = std::fs::remove_dir_all(&dir);
+                std::fs::create_dir_all(&dir).unwrap();
+                Guard(dir)
+            }
+
+            pub fn path(&self) -> &std::path::Path {
+                &self.0
+            }
+        }
+
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod custom_cover_tests {
+    use super::{apply_metadata, clear_custom_cover, open, set_custom_cover, Metadata};
+
+    fn library() -> (scratch3::Guard, rusqlite::Connection) {
+        let dir = scratch3::Guard::new("playdex-cover");
+        let conn = open(&dir.path().join("library.db")).unwrap();
+        conn.execute(
+            "INSERT INTO games (id, path, filename, title, added_at, platform, scrape_status)
+             VALUES (1, 'D:/roms/hack.sfc', 'hack.sfc', 'A Hack', 0, 'snes', 'notfound')",
+            [],
+        )
+        .unwrap();
+        (dir, conn)
+    }
+
+    fn fetched(cover: &str) -> Metadata {
+        Metadata {
+            title: None,
+            description: None,
+            developer: None,
+            publisher: None,
+            genre: None,
+            release_date: None,
+            players: None,
+            rating: None,
+            cover_path: Some(cover.to_string()),
+            screenshot_path: None,
+            logo_path: None,
+            source: "test".into(),
+        }
+    }
+
+    fn cover_of(conn: &rusqlite::Connection) -> Option<String> {
+        conn.query_row("SELECT cover_path FROM games WHERE id = 1", [], |r| r.get(0))
+            .unwrap()
+    }
+
+    /// The whole point. Someone picks artwork for a game the providers have
+    /// never heard of; "fetch everything again" must not throw it away.
+    #[test]
+    fn a_fetch_does_not_replace_a_hand_picked_cover() {
+        let (_d, conn) = library();
+        set_custom_cover(&conn, 1, "C:/media/1/custom.png").unwrap();
+
+        apply_metadata(&conn, 1, &fetched("C:/media/1/cover.jpg")).unwrap();
+
+        assert_eq!(cover_of(&conn).as_deref(), Some("C:/media/1/custom.png"));
+    }
+
+    /// Everything else in the same fetch still lands — it is the cover that is
+    /// protected, not the whole row.
+    #[test]
+    fn the_rest_of_the_metadata_still_applies() {
+        let (_d, conn) = library();
+        set_custom_cover(&conn, 1, "C:/media/1/custom.png").unwrap();
+
+        let mut m = fetched("C:/media/1/cover.jpg");
+        m.developer = Some("Someone".into());
+        m.screenshot_path = Some("C:/media/1/shot.png".into());
+        apply_metadata(&conn, 1, &m).unwrap();
+
+        let (dev, shot): (Option<String>, Option<String>) = conn
+            .query_row(
+                "SELECT developer, screenshot_path FROM games WHERE id = 1",
+                [],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!(dev.as_deref(), Some("Someone"));
+        assert_eq!(shot.as_deref(), Some("C:/media/1/shot.png"));
+        assert_eq!(cover_of(&conn).as_deref(), Some("C:/media/1/custom.png"));
+    }
+
+    #[test]
+    fn without_a_custom_cover_a_fetch_sets_one_as_before() {
+        let (_d, conn) = library();
+        apply_metadata(&conn, 1, &fetched("C:/media/1/cover.jpg")).unwrap();
+        assert_eq!(cover_of(&conn).as_deref(), Some("C:/media/1/cover.jpg"));
+    }
+
+    #[test]
+    fn giving_up_a_custom_cover_lets_fetches_win_again() {
+        let (_d, conn) = library();
+        set_custom_cover(&conn, 1, "C:/media/1/custom.png").unwrap();
+        clear_custom_cover(&conn, 1).unwrap();
+        assert_eq!(cover_of(&conn), None);
+
+        apply_metadata(&conn, 1, &fetched("C:/media/1/cover.jpg")).unwrap();
+        assert_eq!(cover_of(&conn).as_deref(), Some("C:/media/1/cover.jpg"));
+    }
+
+    mod scratch3 {
         use std::sync::atomic::{AtomicU32, Ordering};
 
         static NEXT: AtomicU32 = AtomicU32::new(0);

@@ -259,6 +259,8 @@ pub fn run() {
             commands::remove_library_folder,
             commands::pick_folder,
             commands::pick_file,
+            commands::choose_custom_cover,
+            commands::clear_custom_cover,
             commands::scan_library,
             commands::clean_missing,
             commands::scrape_library,

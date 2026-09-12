@@ -31,6 +31,8 @@ export interface Game {
   /** Set when this entry is a ROM hack built from another game's ROM. */
   baseGameId: number | null;
   patchPath: string | null;
+  /** True when the cover was chosen by hand; metadata fetches leave it alone. */
+  coverCustom: boolean;
 }
 
 export interface HackPreview {

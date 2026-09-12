@@ -38,6 +38,8 @@ pub struct Game {
     /// Set when this entry is a ROM hack produced from another game's ROM.
     pub base_game_id: Option<i64>,
     pub patch_path: Option<String>,
+    /// True when the cover was chosen by hand, which protects it from fetches.
+    pub cover_custom: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

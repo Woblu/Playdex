@@ -128,6 +128,87 @@ pub async fn pick_file(app: AppHandle) -> Option<String> {
         .map(|p| p.to_string_lossy().to_string())
 }
 
+// ------------------------------------------------------- custom artwork
+
+/// Extensions the webview can actually display, which is the real constraint.
+///
+/// Accepting a TIFF would look like it worked and then show nothing, so the
+/// picker offers only formats that will render once they are in place.
+const COVER_EXTENSIONS: &[&str] = &["png", "jpg", "jpeg", "webp", "gif", "bmp", "avif"];
+
+/// Choose a picture for a game by hand.
+///
+/// For the games the providers have never heard of — a hack, an obscure dump,
+/// a homebrew — there is otherwise nothing to look at but a placeholder. The
+/// chosen file is copied into the game's own media folder rather than
+/// referenced where it sits, for the same reason ROMs are not copied but
+/// artwork is: the library owns its artwork, and pointing at a file in
+/// somebody's Downloads folder means the cover disappears when they tidy up.
+///
+/// Returns the new cover path, or `None` if the dialog was dismissed.
+#[tauri::command]
+pub async fn choose_custom_cover(app: AppHandle, id: i64) -> Result<Option<String>> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    app.dialog()
+        .file()
+        .add_filter("Images", COVER_EXTENSIONS)
+        .pick_file(move |picked| {
+            let _ = tx.send(picked);
+        });
+
+    let Some(source) = rx
+        .await
+        .ok()
+        .flatten()
+        .and_then(|p| p.into_path().ok())
+    else {
+        return Ok(None);
+    };
+
+    let ext = source
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .unwrap_or_default();
+    if !COVER_EXTENSIONS.contains(&ext.as_str()) {
+        return Err(AppError::Other(format!(
+            "{ext} is not an image Playdex can show. Use a PNG, JPEG, WebP, GIF, BMP or AVIF."
+        )));
+    }
+
+    let media_root = app.state::<AppState>().media_root.clone();
+    let dir = media::game_media_dir(&media_root, id);
+    std::fs::create_dir_all(&dir).map_err(|e| AppError::Other(e.to_string()))?;
+
+    // Named by extension, and any previous choice in another format is removed,
+    // so a game cannot end up with custom.png and custom.jpg both on disk and
+    // only one of them referenced.
+    for old in COVER_EXTENSIONS {
+        let stale = dir.join(format!("custom.{old}"));
+        if stale.exists() && *old != ext {
+            let _ = std::fs::remove_file(stale);
+        }
+    }
+
+    let dest = dir.join(format!("custom.{ext}"));
+    std::fs::copy(&source, &dest).map_err(|e| AppError::Other(e.to_string()))?;
+
+    let dest_str = dest.to_string_lossy().to_string();
+    {
+        let db = app.state::<Db>();
+        let conn = db.0.lock().unwrap();
+        db::set_custom_cover(&conn, id, &dest_str)?;
+    }
+    Ok(Some(dest_str))
+}
+
+/// Drop a hand-picked cover, letting metadata supply one again.
+#[tauri::command]
+pub fn clear_custom_cover(db: State<Db>, id: i64) -> Result<()> {
+    let conn = db.0.lock().unwrap();
+    db::clear_custom_cover(&conn, id)
+}
+
 // ---------------------------------------------------------------- scan
 
 #[tauri::command]

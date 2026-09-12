@@ -89,7 +89,24 @@ export default function SwitchShell(props: ShellProps) {
     return () => registerBack(null);
   }, [registerBack, view, searchOpen, search]);
 
-  const backdrop = artUrl(selected?.coverPath ?? null);
+  /**
+   * The backdrop holds the last picture it had.
+   *
+   * A game with no artwork used to drop it to flat grey, which reads as the
+   * screen having broken rather than as that one game having no cover. So the
+   * room keeps the colour of the last game that had one, until another game
+   * with artwork replaces it.
+   *
+   * Stored in state from an effect rather than written during render, and the
+   * live value is preferred over the stored one, so arriving at a game that
+   * does have art shows it on the same frame rather than a frame late.
+   */
+  const current = artUrl(selected?.coverPath ?? null);
+  const [lastArt, setLastArt] = useState<string | null>(null);
+  useEffect(() => {
+    if (current) setLastArt(current);
+  }, [current]);
+  const backdrop = current ?? lastArt;
 
   return (
     <div className="switch-shell">
