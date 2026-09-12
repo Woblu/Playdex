@@ -623,6 +623,22 @@ img.real { display: none; width: 100%; height: auto; }
 .get h2 { margin-bottom: 14px; }
 .get .lede { margin: 0 auto; }
 .get .cta { justify-content: center; }
+/* Sits under the requirements line, quieter than the call to action but not
+   hidden: someone whose antivirus just ate the download needs to find this. */
+.note {
+  max-width: 62ch;
+  margin: 22px auto 0;
+  padding: 14px 18px;
+  text-align: left;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--muted);
+  background: rgba(208, 106, 28, 0.07);
+  border: 1px solid rgba(208, 106, 28, 0.28);
+  border-radius: 8px;
+}
+.note b { color: var(--text); }
+
 .reqs {
   margin-top: 26px;
   font-family: var(--mono);
@@ -1240,6 +1256,15 @@ img.real { display: none; width: 100%; height: auto; }
           Windows 10 or 11 &nbsp;&middot;&nbsp; macOS, Apple silicon and Intel in one download &nbsp;&middot;&nbsp; Linux as .deb, .rpm or AppImage<br>
           Free and open source (MIT) &nbsp;&middot;&nbsp; no account required
         </div>
+
+        <p class="note">
+          <b>If Windows removes the installer</b>, take the <code>.msi</code>
+          rather than the <code>.exe</code>. The <code>.exe</code> is a
+          compressed self-extractor and is unsigned, which is enough for
+          Defender to call it a packer and delete it. Same application, and
+          every build is made in public by GitHub Actions from the tagged
+          commit, so you can check the file against the hash on the release.
+        </p>
       </div>
     </div>
   </section>

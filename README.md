@@ -381,6 +381,49 @@ real reason when you ask it directly.
 Every update is verified against a public key compiled into the app before any
 of it runs, so a tampered or mis-hosted file is refused rather than installed.
 
+## Windows may delete the installer
+
+Windows Defender sometimes removes Playdex, usually reporting
+**PUA:Win32/Packunwan** or a machine-learning name like *Trojan:Win32/Wacatac*.
+It is a false positive, and it comes from three things about the build rather
+than anything it does:
+
+- The installer is an NSIS self-extractor using solid LZMA compression. To a
+  heuristic looking for packers, a small executable that unpacks a much larger
+  one is the shape of a packed binary.
+- It is unsigned. There is no Authenticode certificate on it, so there is no
+  publisher for Windows to attribute it to.
+- Every release is a brand new file almost nobody has downloaded, so it has no
+  reputation with SmartScreen. Reputation resets on every version.
+
+None of that is fixed by asking Defender nicely. What actually helps, in order:
+
+1. **Install from the `.msi` instead of the `-setup.exe`.** Both are in every
+   release and install the same application. The MSI is a Windows Installer
+   database rather than a compressed self-extractor, so the packer heuristic
+   has nothing to fire on.
+2. **Report it to Microsoft** at
+   <https://www.microsoft.com/en-us/wdsi/filesubmission>, as a software
+   developer, marked "incorrectly detected". These are normally corrected
+   within a few days, and it fixes it for everyone rather than one machine.
+3. **Sign the installers.** The real fix. [SignPath](https://signpath.io/) has
+   a free certificate programme for open source projects, which this qualifies
+   for; Azure Trusted Signing is about ten dollars a month otherwise. Signing
+   gives Windows a publisher to trust and stops the warnings escalating into
+   deletions.
+
+To check a download is the real thing rather than trusting this page, compare
+it against the release:
+
+```powershell
+Get-FileHash .\Playdex_x.y.z_x64_en-US.msi -Algorithm SHA256
+```
+
+Every installer is built in public by GitHub Actions from the commit the tag
+points at — the run, its logs and the resulting file are all on the releases
+page — so the hash you compute should match the file you downloaded from there
+byte for byte.
+
 ## Setup
 
 ```bash
