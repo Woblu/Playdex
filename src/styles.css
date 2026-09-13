@@ -381,7 +381,13 @@ input:focus, select:focus, textarea:focus {
 
 .detail-close:hover { background: rgba(10, 13, 17, 0.9); }
 
-.detail-body { flex: 1; overflow-y: auto; padding: 0 22px 24px; }
+/* The top padding is what keeps the title visible. The title pulls up 32px to
+   meet the hero, and this is a scroll container: with no padding, that pull-up
+   lifted the whole heading above the container's top edge, where overflow
+   clipped it. Measured in a render, the title sat at 148-180px against a body
+   starting at 180 — entirely outside it — so the game's name never showed in
+   this panel at all. 34px lets the same pull-up land 2px inside. */
+.detail-body { flex: 1; overflow-y: auto; padding: 34px 22px 24px; }
 
 .detail-title {
   font-size: 21px;
@@ -393,7 +399,56 @@ input:focus, select:focus, textarea:focus {
   text-wrap: balance;
 }
 
-.detail-actions { display: flex; gap: 8px; margin: 16px 0 20px; }
+.detail-actions { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0 20px; }
+
+/* The title pulls up over the hero art by 32px. Wrapped in a row so Rename can
+   sit beside it, the row has to carry that pull-up itself — left on the title,
+   the button would sit 32px lower than the name it renames. */
+.detail-title-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  margin: -32px 0 2px;
+  position: relative;
+  z-index: 2;
+}
+
+/* The edit form does not pull up. It is taller than a one-line heading, so the
+   same -32px slid most of it under the hero, where the input and its buttons
+   were half hidden. The overlap is decoration; while you are typing a name it
+   is not worth losing the field to. */
+.detail-rename {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 2px;
+  position: relative;
+  z-index: 2;
+}
+.detail-title-row .detail-title {
+  margin: 0;
+  flex: 1;
+  min-width: 0;
+}
+.detail-title-row .btn { flex: none; margin-bottom: 3px; }
+
+.detail-rename-input {
+  flex: 1;
+  min-width: 0;
+  font-size: 19px;
+  font-weight: 600;
+  padding: 6px 10px;
+}
+
+/* The picker keeps the same rhythm as the action rows around it. */
+.detail-borrow {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  margin: 16px 0 20px;
+}
+.detail-borrow select { flex: 1; min-width: 180px; }
 
 .meta-grid {
   display: grid;

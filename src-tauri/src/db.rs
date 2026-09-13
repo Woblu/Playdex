@@ -135,7 +135,7 @@ CREATE TABLE IF NOT EXISTS play_sessions (
 const GAME_COLS: &str = "id, path, filename, platform, size, crc32, md5, sha1, inner_name, \
      title, description, developer, publisher, genre, release_date, players, rating, region, \
      cover_path, screenshot_path, logo_path, scrape_status, scrape_source, favorite, hidden, \
-     play_count, play_seconds, last_played, added_at, base_game_id, patch_path,      cover_custom";
+     play_count, play_seconds, last_played, added_at, base_game_id, patch_path,      cover_custom, title_custom";
 
 /// Repoint stored paths after the app data directory has moved.
 ///
@@ -229,6 +229,9 @@ fn migrate(conn: &Connection) -> Result<()> {
         // Set when the cover was chosen by hand rather than fetched, which is
         // what stops a later metadata fetch replacing it.
         ("cover_custom", "INTEGER NOT NULL DEFAULT 0"),
+        // Set when the title was typed by hand. A provider that later matches
+        // the game would otherwise replace a name somebody chose on purpose.
+        ("title_custom", "INTEGER NOT NULL DEFAULT 0"),
     ] {
         let mut stmt = conn.prepare("PRAGMA table_info(games)")?;
         let existing: Vec<String> = stmt
@@ -302,6 +305,7 @@ fn row_to_game(row: &Row) -> rusqlite::Result<Game> {
         base_game_id: row.get(29)?,
         patch_path: row.get(30)?,
         cover_custom: row.get::<_, i64>(31)? != 0,
+        title_custom: row.get::<_, i64>(32)? != 0,
     })
 }
 
@@ -456,7 +460,10 @@ pub struct Metadata {
 pub fn apply_metadata(conn: &Connection, id: i64, m: &Metadata) -> Result<()> {
     conn.execute(
         "UPDATE games SET
-            title           = COALESCE(?2, title),
+            -- A name typed by hand is never replaced by a fetched one.
+            title           = CASE WHEN title_custom = 1
+                                   THEN title
+                                   ELSE COALESCE(?2, title) END,
             description     = COALESCE(?3, description),
             developer       = COALESCE(?4, developer),
             publisher       = COALESCE(?5, publisher),
@@ -498,6 +505,74 @@ pub fn apply_metadata(conn: &Connection, id: i64, m: &Metadata) -> Result<()> {
 ///
 /// Marking it also matters: `apply_metadata` leaves a custom cover alone, so
 /// this is what makes the choice stick through a later fetch.
+/// Rename a game.
+///
+/// Marked as well as written, for the same reason a hand-picked cover is: a
+/// later fetch that matches the game would otherwise put the provider's name
+/// straight back over the one chosen here.
+pub fn rename_game(conn: &Connection, id: i64, title: &str) -> Result<()> {
+    conn.execute(
+        "UPDATE games SET title = ?2, title_custom = 1 WHERE id = ?1",
+        params![id, title],
+    )?;
+    Ok(())
+}
+
+/// Artwork paths belonging to a game, for copying elsewhere.
+pub fn artwork_paths(
+    conn: &Connection,
+    id: i64,
+) -> Result<(Option<String>, Option<String>, Option<String>)> {
+    Ok(conn.query_row(
+        "SELECT cover_path, screenshot_path, logo_path FROM games WHERE id = ?1",
+        params![id],
+        |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)),
+    )?)
+}
+
+/// Give one game the details of another, keeping its own name.
+///
+/// For a game no provider knows because it is a modification of one they do:
+/// a hack of Super Mario 64 should look like Super Mario 64 without being
+/// renamed to it. The text is copied from the source row. The artwork paths
+/// are supplied by the caller rather than copied from the source, because the
+/// caller has already copied the files into this game's own media folder —
+/// sharing the source's paths would leave this game's art pointing at a folder
+/// that removing the source game deletes.
+///
+/// The cover is marked as chosen, so a later fetch leaves it alone, and the
+/// game is marked as having metadata so the automatic pass stops retrying it.
+pub fn borrow_metadata(
+    conn: &Connection,
+    from: i64,
+    to: i64,
+    cover: Option<&str>,
+    screenshot: Option<&str>,
+    logo: Option<&str>,
+) -> Result<()> {
+    conn.execute(
+        "UPDATE games SET
+             description     = src.description,
+             developer       = src.developer,
+             publisher       = src.publisher,
+             genre           = src.genre,
+             release_date    = src.release_date,
+             players         = src.players,
+             rating          = src.rating,
+             region          = src.region,
+             cover_path      = ?3,
+             screenshot_path = ?4,
+             logo_path       = ?5,
+             cover_custom    = CASE WHEN ?3 IS NULL THEN 0 ELSE 1 END,
+             scrape_status   = 'ok',
+             scrape_source   = 'borrowed'
+         FROM (SELECT * FROM games WHERE id = ?1) AS src
+         WHERE games.id = ?2",
+        params![from, to, cover, screenshot, logo],
+    )?;
+    Ok(())
+}
+
 pub fn set_custom_cover(conn: &Connection, id: i64, path: &str) -> Result<()> {
     conn.execute(
         "UPDATE games SET cover_path = ?2, cover_custom = 1 WHERE id = ?1",
@@ -1428,6 +1503,149 @@ mod custom_cover_tests {
     }
 
     mod scratch3 {
+        use std::sync::atomic::{AtomicU32, Ordering};
+
+        static NEXT: AtomicU32 = AtomicU32::new(0);
+
+        pub struct Guard(std::path::PathBuf);
+
+        impl Guard {
+            pub fn new(tag: &str) -> Self {
+                let n = NEXT.fetch_add(1, Ordering::Relaxed);
+                let dir =
+                    std::env::temp_dir().join(format!("{tag}-{}-{n}", std::process::id()));
+                let _ = std::fs::remove_dir_all(&dir);
+                std::fs::create_dir_all(&dir).unwrap();
+                Guard(dir)
+            }
+
+            pub fn path(&self) -> &std::path::Path {
+                &self.0
+            }
+        }
+
+        impl Drop for Guard {
+            fn drop(&mut self) {
+                let _ = std::fs::remove_dir_all(&self.0);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod rename_and_borrow_tests {
+    use super::{apply_metadata, borrow_metadata, open, rename_game, Metadata};
+
+    fn library() -> (scratch4::Guard, rusqlite::Connection) {
+        let dir = scratch4::Guard::new("playdex-rename");
+        let conn = open(&dir.path().join("library.db")).unwrap();
+        conn.execute(
+            "INSERT INTO games (id, path, filename, title, added_at, platform, scrape_status,
+                                description, developer, genre, cover_path, screenshot_path)
+             VALUES (1, 'D:/roms/sm64.z64', 'sm64.z64', 'Super Mario 64', 0, 'n64', 'ok',
+                     'Mario in three dimensions.', 'Nintendo', 'Platform',
+                     'C:/media/1/cover.jpg', 'C:/media/1/shot.png')",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO games (id, path, filename, title, added_at, platform, scrape_status)
+             VALUES (2, 'D:/roms/hack.z64', 'hack.z64', 'Super Mario Bros 64', 0, 'n64', 'notfound')",
+            [],
+        )
+        .unwrap();
+        (dir, conn)
+    }
+
+    fn fetched_title(title: &str) -> Metadata {
+        Metadata {
+            title: Some(title.to_string()),
+            description: None,
+            developer: None,
+            publisher: None,
+            genre: None,
+            release_date: None,
+            players: None,
+            rating: None,
+            cover_path: None,
+            screenshot_path: None,
+            logo_path: None,
+            source: "test".into(),
+        }
+    }
+
+    fn row(conn: &rusqlite::Connection, id: i64) -> (String, Option<String>, Option<String>, i64, String) {
+        conn.query_row(
+            "SELECT title, developer, cover_path, cover_custom, scrape_status FROM games WHERE id = ?1",
+            [id],
+            |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?, r.get(3)?, r.get(4)?)),
+        )
+        .unwrap()
+    }
+
+    #[test]
+    fn a_fetch_does_not_undo_a_rename() {
+        let (_d, conn) = library();
+        rename_game(&conn, 2, "My Mario Hack").unwrap();
+        apply_metadata(&conn, 2, &fetched_title("Super Mario 64")).unwrap();
+        assert_eq!(row(&conn, 2).0, "My Mario Hack");
+    }
+
+    #[test]
+    fn an_unrenamed_title_still_takes_the_fetched_one() {
+        let (_d, conn) = library();
+        apply_metadata(&conn, 2, &fetched_title("Fetched Name")).unwrap();
+        assert_eq!(row(&conn, 2).0, "Fetched Name");
+    }
+
+    /// The request that prompted this: the hack looks like Super Mario 64 and
+    /// keeps its own name.
+    #[test]
+    fn borrowing_copies_the_details_but_keeps_the_name() {
+        let (_d, conn) = library();
+        borrow_metadata(&conn, 1, 2, Some("C:/media/2/borrowed-cover.jpg"), None, None).unwrap();
+
+        let (title, developer, cover, custom, status) = row(&conn, 2);
+        assert_eq!(title, "Super Mario Bros 64");
+        assert_eq!(developer.as_deref(), Some("Nintendo"));
+        // Its own copy, not the source's file.
+        assert_eq!(cover.as_deref(), Some("C:/media/2/borrowed-cover.jpg"));
+        assert_eq!(custom, 1);
+        // Out of the automatic pass, which would otherwise keep retrying it.
+        assert_eq!(status, "ok");
+    }
+
+    #[test]
+    fn a_borrowed_cover_survives_a_later_fetch() {
+        let (_d, conn) = library();
+        borrow_metadata(&conn, 1, 2, Some("C:/media/2/borrowed-cover.jpg"), None, None).unwrap();
+        let mut m = fetched_title("Super Mario 64");
+        m.cover_path = Some("C:/media/2/cover.jpg".into());
+        apply_metadata(&conn, 2, &m).unwrap();
+        assert_eq!(row(&conn, 2).2.as_deref(), Some("C:/media/2/borrowed-cover.jpg"));
+    }
+
+    #[test]
+    fn borrowing_from_a_game_with_no_art_does_not_mark_a_cover_chosen() {
+        let (_d, conn) = library();
+        borrow_metadata(&conn, 1, 2, None, None, None).unwrap();
+        let (_, developer, cover, custom, _) = row(&conn, 2);
+        assert_eq!(developer.as_deref(), Some("Nintendo"));
+        assert_eq!(cover, None);
+        assert_eq!(custom, 0);
+    }
+
+    #[test]
+    fn the_source_game_is_left_unchanged() {
+        let (_d, conn) = library();
+        borrow_metadata(&conn, 1, 2, Some("C:/media/2/borrowed-cover.jpg"), None, None).unwrap();
+        let (title, _, cover, custom, _) = row(&conn, 1);
+        assert_eq!(title, "Super Mario 64");
+        assert_eq!(cover.as_deref(), Some("C:/media/1/cover.jpg"));
+        assert_eq!(custom, 0);
+    }
+
+    mod scratch4 {
         use std::sync::atomic::{AtomicU32, Ordering};
 
         static NEXT: AtomicU32 = AtomicU32::new(0);

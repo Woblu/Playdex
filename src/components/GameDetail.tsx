@@ -55,6 +55,19 @@ export default function GameDetail({
   const [command, setCommand] = useState<string | null>(null);
   const [commandError, setCommandError] = useState<string | null>(null);
   const [artNote, setArtNote] = useState<string | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [draftTitle, setDraftTitle] = useState(game.title);
+  const [borrowList, setBorrowList] = useState<Game[] | null>(null);
+  const [borrowFrom, setBorrowFrom] = useState<number | "">("");
+
+  // A different game opened in the same panel must not inherit the half-typed
+  // name or the open picker from the one before.
+  useEffect(() => {
+    setRenaming(false);
+    setDraftTitle(game.title);
+    setBorrowList(null);
+    setBorrowFrom("");
+  }, [game.id, game.title]);
   /** This game's own emulator, when it has been given one. */
   const [emu, setEmu] = useState<EmulatorConfig | null>(null);
   /** The discs behind a multi-disc entry. Empty for an ordinary game. */
@@ -302,7 +315,63 @@ export default function GameDetail({
       </div>
 
       <div className="detail-body">
-        <h1 className="detail-title">{game.title}</h1>
+        {renaming ? (
+          <form
+            className="detail-rename"
+            onSubmit={async (e) => {
+              e.preventDefault();
+              setCommandError(null);
+              try {
+                await api.renameGame(game.id, draftTitle);
+                setRenaming(false);
+                // Refreshes the library, which is what carries the new name
+                // back into this panel and every appearance.
+                onArtworkChanged();
+              } catch (err) {
+                setCommandError(errorMessage(err));
+              }
+            }}
+          >
+            <input
+              className="detail-rename-input"
+              value={draftTitle}
+              autoFocus
+              onChange={(e) => setDraftTitle(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") {
+                  e.stopPropagation();
+                  setRenaming(false);
+                  setDraftTitle(game.title);
+                }
+              }}
+              aria-label="Game name"
+            />
+            <button className="btn primary" type="submit" disabled={busy}>
+              Save
+            </button>
+            <button
+              className="btn"
+              type="button"
+              onClick={() => {
+                setRenaming(false);
+                setDraftTitle(game.title);
+              }}
+            >
+              Cancel
+            </button>
+          </form>
+        ) : (
+          <div className="detail-title-row">
+            <h1 className="detail-title">{game.title}</h1>
+            <button
+              className="btn small"
+              onClick={() => setRenaming(true)}
+              disabled={busy}
+            >
+              Rename
+            </button>
+          </div>
+        )}
 
         <div className="detail-actions">
           <button className="btn primary" onClick={onLaunch} disabled={busy}>
@@ -371,6 +440,78 @@ export default function GameDetail({
         </div>
 
         {artNote && <div className="notice">{artNote}</div>}
+
+        {/* For a game the providers do not know because it is a change to one
+            they do: a hack of Super Mario 64 can look like Super Mario 64 and
+            keep its own name. */}
+        {borrowList === null ? (
+          <div className="detail-actions">
+            <button
+              className="btn"
+              disabled={busy}
+              onClick={async () => {
+                setCommandError(null);
+                try {
+                  const all = await api.listGames({ sort: "title" });
+                  setBorrowList(all.filter((g) => g.id !== game.id));
+                } catch (e) {
+                  setCommandError(errorMessage(e));
+                }
+              }}
+            >
+              Copy details from another game
+            </button>
+          </div>
+        ) : (
+          <div className="detail-borrow">
+            <select
+              value={borrowFrom}
+              onChange={(e) =>
+                setBorrowFrom(e.target.value === "" ? "" : Number(e.target.value))
+              }
+              aria-label="Game to copy details from"
+            >
+              <option value="">Choose a game…</option>
+              {borrowList.map((g) => (
+                <option key={g.id} value={g.id}>
+                  {g.title}
+                  {g.coverPath ? "" : "  (no artwork)"}
+                </option>
+              ))}
+            </select>
+            <button
+              className="btn primary"
+              disabled={busy || borrowFrom === ""}
+              onClick={async () => {
+                if (borrowFrom === "") return;
+                setCommandError(null);
+                try {
+                  await api.borrowMetadata(borrowFrom, game.id);
+                  const source = borrowList.find((g) => g.id === borrowFrom);
+                  setArtNote(
+                    `Details and artwork copied from ${source?.title ?? "that game"}. The name is still yours.`,
+                  );
+                  setBorrowList(null);
+                  setBorrowFrom("");
+                  onArtworkChanged();
+                } catch (e) {
+                  setCommandError(errorMessage(e));
+                }
+              }}
+            >
+              Copy
+            </button>
+            <button
+              className="btn"
+              onClick={() => {
+                setBorrowList(null);
+                setBorrowFrom("");
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        )}
 
         {scrapeNote && <div className="notice">{scrapeNote}</div>}
         {commandError && <div className="error-banner">{commandError}</div>}

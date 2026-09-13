@@ -261,6 +261,8 @@ pub fn run() {
             commands::pick_file,
             commands::choose_custom_cover,
             commands::clear_custom_cover,
+            commands::rename_game,
+            commands::borrow_metadata,
             commands::scan_library,
             commands::clean_missing,
             commands::scrape_library,

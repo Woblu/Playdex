@@ -202,6 +202,68 @@ pub async fn choose_custom_cover(app: AppHandle, id: i64) -> Result<Option<Strin
     Ok(Some(dest_str))
 }
 
+/// Rename a game. Empty names are refused rather than saved as a blank tile.
+#[tauri::command]
+pub fn rename_game(db: State<Db>, id: i64, title: String) -> Result<()> {
+    let title = title.trim();
+    if title.is_empty() {
+        return Err(AppError::Other("A game needs a name.".into()));
+    }
+    let conn = db.0.lock().unwrap();
+    db::rename_game(&conn, id, title)
+}
+
+/// Give a game the details and artwork of another game, keeping its name.
+///
+/// The artwork files are copied into the receiving game's own media folder.
+/// Pointing at the source's files would look identical until the source game
+/// was removed, at which point its media folder is deleted and this game's art
+/// goes with it.
+#[tauri::command]
+pub fn borrow_metadata(app: AppHandle, from: i64, to: i64) -> Result<()> {
+    if from == to {
+        return Err(AppError::Other("Pick a different game to copy from.".into()));
+    }
+
+    let (cover, shot, logo) = {
+        let db = app.state::<Db>();
+        let conn = db.0.lock().unwrap();
+        db::artwork_paths(&conn, from)?
+    };
+
+    let media_root = app.state::<AppState>().media_root.clone();
+    let dir = media::game_media_dir(&media_root, to);
+    std::fs::create_dir_all(&dir).map_err(|e| AppError::Other(e.to_string()))?;
+
+    // A source file that has gone missing is skipped rather than failing the
+    // whole copy: the text is still worth having.
+    let copy = |src: &Option<String>, stem: &str| -> Option<String> {
+        let src = std::path::PathBuf::from(src.as_ref()?);
+        if !src.is_file() {
+            return None;
+        }
+        let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("img");
+        let dest = dir.join(format!("{stem}.{ext}"));
+        std::fs::copy(&src, &dest).ok()?;
+        Some(dest.to_string_lossy().to_string())
+    };
+
+    let cover = copy(&cover, "borrowed-cover");
+    let shot = copy(&shot, "borrowed-screenshot");
+    let logo = copy(&logo, "borrowed-logo");
+
+    let db = app.state::<Db>();
+    let conn = db.0.lock().unwrap();
+    db::borrow_metadata(
+        &conn,
+        from,
+        to,
+        cover.as_deref(),
+        shot.as_deref(),
+        logo.as_deref(),
+    )
+}
+
 /// Drop a hand-picked cover, letting metadata supply one again.
 #[tauri::command]
 pub fn clear_custom_cover(db: State<Db>, id: i64) -> Result<()> {

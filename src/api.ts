@@ -98,6 +98,17 @@ export const chooseCustomCover = (id: number) =>
 export const clearCustomCover = (id: number) =>
   invoke<void>("clear_custom_cover", { id });
 
+/** Rename a game. The new name survives later metadata fetches. */
+export const renameGame = (id: number, title: string) =>
+  invoke<void>("rename_game", { id, title });
+
+/**
+ * Give `to` the details and artwork of `from`, keeping `to`'s own name.
+ * The artwork is copied, so removing `from` later does not take it away.
+ */
+export const borrowMetadata = (from: number, to: number) =>
+  invoke<void>("borrow_metadata", { from, to });
+
 export const cancelScrape = () => invoke<void>("cancel_scrape");
 
 // -------------------------------------------------------------- launch

@@ -40,6 +40,8 @@ pub struct Game {
     pub patch_path: Option<String>,
     /// True when the cover was chosen by hand, which protects it from fetches.
     pub cover_custom: bool,
+    /// True when the title was typed by hand, which protects it from fetches.
+    pub title_custom: bool,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -168,6 +168,7 @@ mod tests {
             base_game_id: None,
             patch_path: None,
             cover_custom: false,
+            title_custom: false,
         }
     }
 

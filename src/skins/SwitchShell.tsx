@@ -199,6 +199,7 @@ export default function SwitchShell(props: ShellProps) {
                 on={game.id === selectedId}
                 onSelect={onSelect}
                 onLaunch={onLaunch}
+                onOpenDetail={onOpenDetail}
               />
             ))}
           </div>
@@ -216,6 +217,7 @@ export default function SwitchShell(props: ShellProps) {
                   on={game.id === selectedId}
                   onSelect={onSelect}
                   onLaunch={onLaunch}
+                  onOpenDetail={onOpenDetail}
                 />
               ))
             )}
@@ -324,11 +326,13 @@ function Tile({
   on,
   onSelect,
   onLaunch,
+  onOpenDetail,
 }: {
   game: Game;
   on: boolean;
   onSelect: (id: number) => void;
   onLaunch: (id: number) => void;
+  onOpenDetail: (id: number) => void;
 }) {
   const cover = artUrl(game.coverPath);
   return (
@@ -339,7 +343,16 @@ function Tile({
       onFocus={() => onSelect(game.id)}
       onClick={() => onSelect(game.id)}
       onDoubleClick={() => onLaunch(game.id)}
-      title={`${game.title}\nDouble-click to play`}
+      // A game's options were reachable from a pad (X) and from the Options
+      // button in the footer, but not from the tile itself, which is the one
+      // thing a mouse user actually points at. Right-click is where anyone
+      // looks for "more about this thing".
+      onContextMenu={(e) => {
+        e.preventDefault();
+        onSelect(game.id);
+        onOpenDetail(game.id);
+      }}
+      title={`${game.title}\nDouble-click to play, right-click for options`}
     >
       {cover ? (
         <img src={cover} alt="" loading="lazy" />

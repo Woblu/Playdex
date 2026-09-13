@@ -33,6 +33,8 @@ export interface Game {
   patchPath: string | null;
   /** True when the cover was chosen by hand; metadata fetches leave it alone. */
   coverCustom: boolean;
+  /** True when the title was typed by hand; metadata fetches leave it alone. */
+  titleCustom: boolean;
 }
 
 export interface HackPreview {

@@ -202,6 +202,26 @@ again** cannot quietly undo the work of picking artwork by hand — while
 everything else in that fetch still lands. **Use fetched artwork** gives the
 choice up again.
 
+### Renaming, and borrowing another game's details
+
+**Rename** in a game's panel changes its title. Like a hand-picked cover, a name
+typed by hand is marked, and `apply_metadata` leaves a marked title alone — so a
+later fetch that matches the game cannot put the provider's name back over the
+one you chose. Rescans never touched titles to begin with.
+
+**Copy details from another game** is for the games no provider knows because
+they are a change to one it does. A hack of Super Mario 64 can take Super Mario
+64's description, developer, genre, release date and artwork while keeping its
+own name. The artwork files are copied into the receiving game's own media
+folder rather than shared: removing a game deletes its media folder, so sharing
+paths would leave the hack's art pointing at nothing the moment the original
+was removed. The borrowed cover is protected from later fetches the same way a
+chosen one is.
+
+In the Console appearance a game's panel opens on **right-click** as well as
+from a pad's X button and the footer's Options button, since the tile is the
+thing a mouse user points at.
+
 Artwork downloads once into the app data directory and is served to the UI over
 a private `media://` protocol scoped to that directory.
 
